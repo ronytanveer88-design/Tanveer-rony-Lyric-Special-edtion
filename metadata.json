@@ -1,0 +1,6 @@
+{
+  "name": "Lyric Video Studio",
+  "description": "লিরিক স্টুডিও — Create synced Bengali and multilingual lyric videos with custom backgrounds, animations, LRC export, and HD rendering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
