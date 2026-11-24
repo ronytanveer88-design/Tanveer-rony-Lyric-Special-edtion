@@ -1,4 +1,6 @@
-export type StudioTab = 'lyrics' | 'sync' | 'design' | 'export';
+export type CreativeSuiteApp = 'cinema' | 'intro' | 'translator' | 'lyrics';
+
+export type StudioTab = 'lyrics' | 'sync' | 'autosync' | 'design' | 'export';
 
 export type AspectRatio = '16:9' | '9:16' | '1:1';
 
@@ -32,6 +34,7 @@ export interface DesignConfig {
   ratio: AspectRatio;
   bgTheme: BgTheme;
   transitionStyle: TransitionStyle;
+  transitionSpeed: number;
   animation?: LyricAnimation;
   bouncingAnimation: boolean;
   showNextLine: boolean;
@@ -91,6 +94,7 @@ export const DEFAULT_DESIGN: DesignConfig = {
   ratio: '16:9',
   bgTheme: 'rain',
   transitionStyle: 'Slide',
+  transitionSpeed: 0.4,
   bouncingAnimation: false,
   showNextLine: true,
   textShadow: true,

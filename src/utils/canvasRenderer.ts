@@ -384,7 +384,15 @@ export function drawScene({
       ? 'None'
       : 'Slide';
 
-  const animDuration = 0.4;
+  const animDuration = Math.min(
+    2,
+    Math.max(
+      0.1,
+      design.transitionSpeed !== undefined && Number.isFinite(Number(design.transitionSpeed))
+        ? Number(design.transitionSpeed)
+        : 0.4
+    )
+  );
   const rawProgress = Math.min(1, Math.max(0, elapsedSinceLineStart / animDuration));
   const eased = 1 - Math.pow(1 - rawProgress, 3);
 

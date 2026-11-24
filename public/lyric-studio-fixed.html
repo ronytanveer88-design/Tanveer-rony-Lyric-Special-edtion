@@ -57,9 +57,40 @@ textarea{min-height:150px;resize:vertical;line-height:1.55}
 .kbd-bar{margin-top:10px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:#0a0d18;font-size:11px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
 @media(min-width:860px){
   body{padding-bottom:24px}
-  .tabs{position:static;border-top:0;background:transparent;padding:0;gap:6px;max-width:460px}
-  .tab{flex-direction:row;padding:8px 12px;border-radius:10px;font-size:13px;gap:6px}
+  .tabs{position:static;border-top:0;background:transparent;padding:0;gap:6px;max-width:540px}
+  .tab{flex-direction:row;padding:8px 10px;border-radius:10px;font-size:12px;gap:5px}
   .tab.active{background:rgba(255,122,61,.14)}
+}
+body.embedded{padding-bottom:16px}
+body.embedded .top{flex-direction:column;align-items:stretch;gap:0;padding:6px 8px}
+body.embedded .brand{display:none}
+body.embedded .tabs{position:static;border-top:0;background:#111522;border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px;max-width:none}
+body.embedded .tab{flex-direction:column;padding:5px 2px;border-radius:9px;font-size:10px;gap:2px;justify-content:center}
+body.embedded .tab .ic{font-size:14px}
+body.embedded .tab.active{background:rgba(255,122,61,.2)}
+/* Zero-scroll split screen for Manual Sync (p2) */
+html.manual-lock,body.manual-sync-active{height:100%;overflow:hidden}
+body.manual-sync-active{display:flex;flex-direction:column;padding-bottom:0}
+body.manual-sync-active .wrap{flex:1;min-height:0;width:100%;padding:6px 8px calc(66px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;overflow:hidden}
+body.embedded.manual-sync-active .wrap{padding:6px 8px 6px}
+@media(min-width:860px){body.manual-sync-active .wrap{padding:10px 12px 12px}}
+#p2.active{display:flex;flex-direction:column;flex:1;min-height:0;gap:6px;overflow:hidden}
+.ms-stage{flex-shrink:0;padding:6px 8px;margin-bottom:0}
+.ms-stage .preview-box{max-height:23vh;display:flex;align-items:center;justify-content:center;background:#000}
+.ms-stage .preview-box canvas{width:auto;max-width:100%;height:100%;max-height:23vh;object-fit:contain;margin:0 auto}
+.ms-ctrl{flex-shrink:0;padding:8px 10px;margin-bottom:0}
+.ms-list{flex:1;min-height:92px;display:flex;flex-direction:column;padding:8px 10px;margin-bottom:0;overflow:hidden}
+.ms-list #syncList{flex:1;min-height:0;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.ms-cue{display:flex;align-items:center;gap:8px;background:#0a0d18;border:1px solid rgba(255,122,61,.4);border-radius:11px;padding:6px 9px}
+.ms-step-btn{border:1px solid #263050;background:#161c30;color:#eef1f8;border-radius:8px;width:30px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;font-weight:700;padding:0}
+.ms-step-btn:active{transform:scale(.95)}
+.ms-grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:6px}
+.ms-grid5 .btn{padding:4px 2px;min-height:34px;font-size:11px;border-radius:9px}
+.design-sticky{position:sticky;top:52px;z-index:14;padding:8px;box-shadow:0 10px 26px rgba(0,0,0,.55)}
+body.embedded .design-sticky{top:56px}
+@media(max-width:859px){
+  .design-sticky .preview-box{max-height:24vh;display:flex;align-items:center;justify-content:center}
+  .design-sticky .preview-box canvas{width:auto;max-width:100%;height:100%;max-height:24vh;object-fit:contain;margin:0 auto}
 }
 </style>
 </head>
@@ -67,8 +98,9 @@ textarea{min-height:150px;resize:vertical;line-height:1.55}
 <div class="top">
   <span class="brand">লিরিক স্টুডিও</span>
   <div class="tabs" id="navTabs">
-    <button class="tab active" onclick="go(1)" id="t1"><span class="ic">🎵</span><span>গান ও লিরিক</span></button>
-    <button class="tab" onclick="go(2)" id="t2"><span class="ic">⏱️</span><span>সিঙ্ক</span></button>
+    <button class="tab active" onclick="go(1)" id="t1"><span class="ic">🎵</span><span>গান</span></button>
+    <button class="tab" onclick="go(2)" id="t2"><span class="ic">👆</span><span>ম্যানুয়াল</span></button>
+    <button class="tab" onclick="go(5)" id="t5"><span class="ic">⚡</span><span>অটো সিঙ্ক</span></button>
     <button class="tab" onclick="go(3)" id="t3"><span class="ic">🎨</span><span>ডিজাইন</span></button>
     <button class="tab" onclick="go(4)" id="t4"><span class="ic">🎬</span><span>ভিডিও</span></button>
   </div>
@@ -114,95 +146,132 @@ textarea{min-height:150px;resize:vertical;line-height:1.55}
   </div>
 </div>
 
-<!-- ট্যাব ২ : সিঙ্ক -->
+<!-- ট্যাব ২ : স্ক্রিন দেখে ম্যানুয়াল সিঙ্ক (Zero-Scroll Split View) -->
 <div class="page" id="p2">
-  <div class="card" style="padding:8px">
+  <div class="card ms-stage">
     <div class="preview-box" id="prevWrap2"><canvas id="c2" width="640" height="360"></canvas></div>
+    <div class="progress" id="progBar" onclick="seekBar(event,'progBar')" style="margin:6px 0 4px"><div id="prog"></div></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;min-width:0">
+        <span id="time" class="mono">0:00.0 / 0:00.0</span>
+        <span id="lineInfo" class="mono muted">সিংক 0/0</span>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="btn btn-dark btn-sm" style="flex:none;min-height:32px;padding:3px 10px;background:var(--accent);color:#090b12;border:0" onclick="togglePlay()" id="playBtn">▶ চালাও</button>
+        <button class="btn btn-dark btn-sm" style="flex:none;min-height:32px;padding:3px 7px" onclick="restart()" title="শুরু থেকে">⏮</button>
+        <button class="btn btn-dark btn-sm" style="flex:none;min-height:32px;padding:3px 7px" onclick="seekRel(-2)" title="২ সেকেন্ড পেছনে">-2s</button>
+        <button class="btn btn-dark btn-sm" style="flex:none;min-height:32px;padding:3px 7px" onclick="seekRel(2)" title="২ সেকেন্ড সামনে">+2s</button>
+      </div>
+    </div>
   </div>
-  <div class="card">
-    <div class="progress" id="progBar" onclick="seekBar(event)"><div id="prog"></div></div>
-    <div class="row" style="justify-content:space-between;font-size:13px">
-      <span id="time" class="mono">0:00.0 / 0:00.0</span>
-      <span id="lineInfo" class="mono">লাইন 0/0</span>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button class="btn btn-dark" onclick="togglePlay()" id="playBtn">▶ চালাও</button>
-      <button class="btn btn-dark" onclick="restart()">⏮ শুরু</button>
-      <button class="btn btn-dark" onclick="seekRel(-5)">⏪ 5s</button>
-      <button class="btn btn-dark" onclick="seekRel(5)">5s ⏩</button>
-    </div>
-    <div class="row" style="margin-top:10px;background:#0a0d18;padding:4px;border-radius:10px;border:1px solid var(--border)">
-      <button class="btn btn-dark btn-sm sel" id="modeManualBtn" onclick="setSyncMode('manual')">✋ Manual Sync</button>
-      <button class="btn btn-dark btn-sm" id="modeAutoBtn" onclick="setSyncMode('auto')">⚡ Auto Sync</button>
-    </div>
 
-    <div style="margin-top:10px;padding:10px;border-radius:10px;border:1px solid var(--border);background:#0a0d18">
+  <div class="card ms-ctrl">
+    <div class="ms-cue">
+      <div style="min-width:0;flex:1">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:2px">
+          <span id="nextLineIdx">এখন ট্যাপের লাইন #1</span>
+          <span id="nextLineTime" class="mono">সিংক বাকি</span>
+        </div>
+        <div id="nextLine" style="font-size:14px;font-weight:700;color:var(--accent2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+        <button class="ms-step-btn" onclick="stepLine(-1)" title="আগের লাইন">▲</button>
+        <button class="ms-step-btn" onclick="stepLine(1)" title="পরের লাইন">▼</button>
+      </div>
+    </div>
+    <div class="row" style="margin:7px 0 0;gap:6px">
+      <button class="syncBtn" style="flex:2.3;margin:0;min-height:48px;font-size:14px" onclick="markLine()">🎯 এই লাইন এখন (ট্যাপ)</button>
+      <button class="btn btn-dark" style="flex:.85;min-height:48px;padding:6px 8px" onclick="insertGap()">♪ গ্যাপ</button>
+    </div>
+    <div class="ms-grid5">
+      <button class="btn btn-dark btn-sm" onclick="adjust(-0.5)">-0.5s</button>
+      <button class="btn btn-dark btn-sm" onclick="adjust(-0.1)">-0.1s</button>
+      <button class="btn btn-dark btn-sm" onclick="adjust(0.1)">+0.1s</button>
+      <button class="btn btn-dark btn-sm" onclick="adjust(0.5)">+0.5s</button>
+      <button class="btn btn-dark btn-sm" onclick="undoMark()">↩ আনডু</button>
+    </div>
+    <div id="syncMsg" class="ok" style="margin-top:4px;font-size:11px"></div>
+  </div>
+
+  <div class="card ms-list">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;flex-shrink:0">
+      <span style="font-size:12px;font-weight:700;color:#fff">সিংক লিস্ট (স্বয়ংক্রিয় স্ক্রল)</span>
+      <button class="btn btn-dark btn-sm" style="flex:none;min-height:26px;padding:2px 8px;font-size:11px;color:var(--accent2)" onclick="go(5)">⚡ অটো সিঙ্ক →</button>
+    </div>
+    <div id="syncList"></div>
+  </div>
+</div>
+
+<!-- ট্যাব ৫ : অটো সিঙ্ক ও ফাইন টিউন -->
+<div class="page" id="p5">
+  <div class="card" style="padding:8px">
+    <div class="preview-box" id="prevWrap5"><canvas id="c5" width="640" height="360"></canvas></div>
+    <div class="progress" id="progBar5" onclick="seekBar(event,'progBar5')" style="margin:8px 0 4px"><div id="prog5"></div></div>
+    <div class="row" style="justify-content:space-between;align-items:center;font-size:12px">
+      <span id="time5" class="mono">0:00.0 / 0:00.0</span>
+      <span id="lineInfo5" class="mono muted">সিংক 0/0</span>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn btn-dark btn-sm" onclick="togglePlay()" id="playBtn5">▶ চালাও</button>
+      <button class="btn btn-dark btn-sm" onclick="restart()">⏮ শুরু</button>
+      <button class="btn btn-dark btn-sm" onclick="seekRel(-3)">⏪ 3s</button>
+      <button class="btn btn-dark btn-sm" onclick="seekRel(3)">3s ⏩</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>⚡ অটো সিঙ্ক ও ইন্ট্রো সময়</h3>
+    <div style="padding:10px;border-radius:10px;border:1px solid var(--border);background:#0a0d18">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
         <label style="margin:0;color:var(--text);font-weight:700">ইন্ট্রো সময় (Intro Seconds)</label>
         <button class="btn btn-dark btn-sm" style="flex:none;min-height:30px;padding:4px 10px;font-size:11px;color:var(--accent2)" onclick="captureIntroFromAudio()">🎯 অডিও সময় নাও</button>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">গানের শুরুতে যত সেকেন্ড ইন্ট্রো আছে লিখো—ভুল সিংক ঠিক করতে বা অটো সিংকে নিখুঁত সময় দেবে।</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">গানের শুরুতে যত সেকেন্ড ইন্ট্রো আছে দিন—ভুল সিংক ঠিক করতে বা অটো সিংকে নিখুঁত সময় দেবে।</div>
       <div class="row" style="align-items:center">
         <input id="introSecondsInput" type="number" min="0" step="0.1" value="3" oninput="saveIntroSec()" placeholder="যেমন: 5" style="flex:1;min-height:38px;margin:0;padding:8px 10px;font-size:13px">
         <button class="btn btn-dark btn-sm" style="flex:1.4;min-height:38px" onclick="alignSyncToIntro()">ইন্ট্রো থেকে সিংক ঠিক করো</button>
       </div>
     </div>
 
-    <div id="autoSyncPane" style="display:none;margin-top:10px;padding:10px;border-radius:10px;border:1px solid var(--border);background:#0a0d18">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">গানের ইন্ট্রো সময় বাদ দিয়ে সব লিরিক লাইনে সমানভাবে টাইমিং বসবে।</div>
-      <div class="row">
-        <button class="syncBtn" style="flex:2;margin:0;min-height:48px" onclick="autoSync()">⚡ Auto Sync চালু করো</button>
-        <button class="btn btn-dark btn-sm" style="flex:1" onclick="undoMark()">↩ Undo</button>
+    <div class="row" style="margin-top:10px">
+      <button class="syncBtn" style="flex:2;margin:0;min-height:48px" onclick="autoSync()">⚡ Auto Sync চালু করো</button>
+      <button class="btn btn-dark btn-sm" style="flex:.9;min-height:48px" onclick="undoMark()">↩ Undo</button>
+    </div>
+
+    <div style="margin-top:10px;padding:10px;border-radius:10px;border:1px solid var(--border);background:#0a0d18">
+      <label style="margin:0 0 6px;color:var(--text);font-weight:700">সব লাইন একসাথে আগে/পরে সরান (Batch Offset)</label>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn btn-dark btn-sm" onclick="quickBatchOffset(-0.5)">-0.5s</button>
+        <button class="btn btn-dark btn-sm" onclick="quickBatchOffset(-0.2)">-0.2s</button>
+        <button class="btn btn-dark btn-sm" onclick="quickBatchOffset(0.2)">+0.2s</button>
+        <button class="btn btn-dark btn-sm" onclick="quickBatchOffset(0.5)">+0.5s</button>
+      </div>
+      <div class="row" style="align-items:center">
+        <input id="batchOffsetInput" type="number" step="0.1" placeholder="কাস্টম সেকেন্ড (যেমন: 0.5 বা -0.5)" style="flex:2;min-height:38px;margin:0;padding:8px 10px;font-size:13px">
+        <button class="btn btn-dark btn-sm" style="flex:1;min-height:38px" onclick="applyBatchOffset()">প্রয়োগ করো</button>
       </div>
     </div>
 
-    <div id="manualSyncPane">
-      <div id="nextLine" style="font-size:13px;color:var(--accent2);margin-top:10px;min-height:18px"></div>
-      <div class="row" style="margin:8px 0">
-        <button class="syncBtn" style="flex:2;margin:0" onclick="markLine()">👉 এই লাইন এখন শুরু (SET)</button>
-        <button class="btn btn-dark" style="flex:1" onclick="insertGap()">⏸ Gap</button>
-      </div>
-      <div class="row">
-        <button class="btn btn-dark btn-sm" onclick="adjust(-0.5)">-০.৫s</button>
-        <button class="btn btn-dark btn-sm" onclick="adjust(-0.1)">-০.১s</button>
-        <button class="btn btn-dark btn-sm" onclick="adjust(0.1)">+০.১s</button>
-        <button class="btn btn-dark btn-sm" onclick="adjust(0.5)">+০.৫s</button>
-        <button class="btn btn-dark btn-sm" onclick="undoMark()">↩ Undo</button>
-        <button class="btn btn-dark btn-sm" onclick="autoSync()">⚡ অটো ভাগ</button>
-      </div>
-      <div class="row" style="margin-top:8px;align-items:center">
-        <input id="manualLineTimeInput" type="number" min="0" step="0.1" placeholder="সিলেক্টেড লাইন সময় (sec)" style="flex:2;min-height:38px;margin:0;padding:8px 10px;font-size:13px">
-        <button class="btn btn-dark btn-sm" style="flex:1;min-height:38px" onclick="setManualLineTime()">সময় সেট</button>
-      </div>
+    <div class="row" style="margin-top:10px;align-items:center">
+      <input id="manualLineTimeInput" type="number" min="0" step="0.1" placeholder="সিলেক্টেড লাইনের সময় (sec)" style="flex:2;min-height:38px;margin:0;padding:8px 10px;font-size:13px">
+      <button class="btn btn-dark btn-sm" style="flex:1;min-height:38px" onclick="setManualLineTime()">সময় সেট</button>
     </div>
 
-    <div class="row" style="margin-top:8px;align-items:center">
-      <input id="batchOffsetInput" type="number" step="0.1" placeholder="Batch Offset (s): যেমন 0.5 বা -0.5" style="flex:2;min-height:38px;margin:0;padding:8px 10px;font-size:13px">
-      <button class="btn btn-dark btn-sm" style="flex:1;min-height:38px" onclick="applyBatchOffset()">প্রয়োগ করো</button>
-    </div>
-    <div id="syncMsg" class="ok" style="margin-top:8px"></div>
-    <div class="kbd-bar">
-      <strong style="color:#9aa6c8">⌨ শর্টকাট:</strong>
-      <span><span class="kbd">Space</span> Play/Pause</span>
-      <span><span class="kbd">←/→</span> ±5s (Shift ±1s)</span>
-      <span><span class="kbd">M</span> Mark (SET)</span>
-      <span><span class="kbd">G</span> Gap</span>
-      <span><span class="kbd">↑/↓</span> লাইন</span>
-      <span><span class="kbd">[/]</span> ±0.1s</span>
-      <span><span class="kbd">Z</span> Undo</span>
-    </div>
+    <button class="btn btn-dark" style="width:100%;margin-top:10px;border-color:rgba(255,122,61,.5);color:var(--accent2)" onclick="go(2)">👆 অটো সিঙ্ক না মিললে স্ক্রিন দেখে ম্যানুয়াল সিঙ্ক করো →</button>
+    <div id="syncMsg5" class="ok" style="margin-top:8px"></div>
   </div>
+
   <div class="card">
-    <h3>সিংক লিস্ট (ক্লিক করে সিলেক্ট করো বা Go চাপো)</h3>
-    <div id="syncList"></div>
+    <h3>সব লাইনের টাইমলাইন (ক্লিক করে বাছাই বা Go চাপো)</h3>
+    <div id="syncList5" style="max-height:260px;overflow-y:auto"></div>
   </div>
 </div>
 
 <!-- ট্যাব ৩ : ডিজাইন -->
 <div class="page" id="p3">
-  <div class="card" style="padding:8px">
+  <div class="card design-sticky">
     <div class="preview-box" id="prevWrap3"><canvas id="c3" width="640" height="360"></canvas></div>
-    <button class="btn btn-accent" style="margin-top:8px" onclick="openFullscreenPreview()">⛶ Fullscreen Preview</button>
+    <button class="btn btn-accent btn-sm" style="margin-top:6px;min-height:34px;font-size:12px" onclick="openFullscreenPreview()">⛶ Fullscreen Preview</button>
   </div>
   <div class="card">
     <h3>ব্যাকগ্রাউন্ড থিম ও মিডিয়া</h3>
@@ -243,7 +312,7 @@ textarea{min-height:150px;resize:vertical;line-height:1.55}
     </div>
     <label>Overlay Opacity (<span id="bgOverlayOpacityVal" class="mono">0</span>%)</label>
     <input type="range" id="bgOverlayOpacity" min="0" max="100" value="0" oninput="updateDesign()">
-    <label>Video Filters</label>
+    <label>Video Filter</label>
     <select id="videoFilter" onchange="updateDesign()">
       <option value="none">None</option>
       <option value="grayscale">Grayscale</option>
@@ -265,6 +334,8 @@ textarea{min-height:150px;resize:vertical;line-height:1.55}
       <option value="Slide" selected>Slide</option>
       <option value="None">None</option>
     </select>
+    <label>Transition Speed (<span id="transitionSpeedVal" class="mono">0.40</span>s)</label>
+    <input type="range" id="transitionSpeed" min="0.1" max="2" step="0.05" value="0.4" oninput="previewAnimStart=performance.now();updateDesign()">
     <label>Text Alignment</label>
     <div class="row" style="margin-top:6px">
       <button class="btn btn-dark btn-sm" id="alignLeft" onclick="setAlign('left')">Left</button>
@@ -338,7 +409,9 @@ textarea{min-height:150px;resize:vertical;line-height:1.55}
     <div id="vstatus" class="ok"></div>
     <video id="rv" controls playsinline style="display:none;width:100%;margin-top:10px;border-radius:12px"></video>
     <a id="dl" class="btn btn-accent" style="display:none;margin-top:10px;text-decoration:none" onclick="return handleDownloadRendered(event)">⬇ ভিডিও ডাউনলোড</a>
-    <button id="shareBtn" class="btn btn-dark" style="display:none;width:100%;margin-top:8px" onclick="shareVideo()">📤 শেয়ার / সেভ</button>
+    <button id="dlAlt" type="button" class="btn btn-dark" style="display:none;width:100%;margin-top:8px" onclick="downloadRenderedAlt()">📥 বিকল্প ডাউনলোড (APK / WebView)</button>
+    <button id="shareBtn" type="button" class="btn btn-dark" style="display:none;width:100%;margin-top:8px" onclick="shareVideo()">📤 শেয়ার / ফোনে সেভ</button>
+    <div id="dlHelp" class="muted" style="display:none;margin-top:8px;font-size:12px;line-height:1.5">টিপস: সরাসরি ডাউনলোড না হলে <b>বিকল্প ডাউনলোড (APK / WebView)</b> বা <b>শেয়ার / ফোনে সেভ</b> চাপুন, অথবা উপরের ভিডিও প্লেয়ারের <b>⋮</b> মেনু থেকে Download করুন।</div>
   </div>
   <div class="card">
     <h3>প্রজেক্ট ম্যানেজার (Project Manager)</h3>
@@ -405,25 +478,93 @@ function notify(msg,type){
   toastTimer=setTimeout(()=>{el.style.display='none';},3200);
 }
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function store(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}
-function load(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}}
+const _memStore=Object.assign({},(window.__TCS_INIT_STORAGE__&&typeof window.__TCS_INIT_STORAGE__==='object')?window.__TCS_INIT_STORAGE__:{});
+function getSafeStorage(){
+  try{localStorage.setItem('_tcs_ls','1');localStorage.removeItem('_tcs_ls');return localStorage;}catch(e){}
+  try{if(window.parent&&window.parent!==window&&window.parent.localStorage){window.parent.localStorage.setItem('_tcs_ls','1');window.parent.localStorage.removeItem('_tcs_ls');return window.parent.localStorage;}}catch(e){}
+  return null;
+}
+function getAndroidBridge(){
+  try{if(window.AndroidBridge&&typeof window.AndroidBridge.startFileSave==='function')return window.AndroidBridge;}catch(e){}
+  try{if(window.parent&&window.parent!==window&&window.parent.AndroidBridge&&typeof window.parent.AndroidBridge.startFileSave==='function')return window.parent.AndroidBridge;}catch(e){}
+  return null;
+}
+function store(k,v){
+  const raw=JSON.stringify(v);
+  _memStore[k]=raw;
+  let ok=false;
+  try{const st=getSafeStorage();if(st){st.setItem(k,raw);ok=true;}}catch(e){}
+  try{if(window.parent&&window.parent!==window){window.parent.postMessage({type:'TCS_STORAGE_SET',key:k,value:raw},'*');ok=true;}}catch(e){}
+  return ok;
+}
+function load(k,d){
+  try{const st=getSafeStorage();if(st){const v=st.getItem(k);if(v!=null){_memStore[k]=v;return JSON.parse(v);}}}catch(e){}
+  try{if(_memStore[k]!=null)return JSON.parse(_memStore[k]);}catch(e){}
+  return d;
+}
 function format(s){if(!isFinite(s)||s<0)s=0;const tn=Math.round(s*10);const m=Math.floor(tn/600);const sec=(tn%600)/10;return m+':'+sec.toFixed(1).padStart(4,'0');}
 function lrcTime(t){const cs=Math.max(0,Math.round(t*100));const p=n=>String(n).padStart(2,'0');return '['+p(Math.floor(cs/6000))+':'+p(Math.floor((cs%6000)/100))+'.'+p(cs%100)+']';}
+function triggerLocalDownload(blob,name){
+  const dlBlob=new Blob([blob],{type:'application/octet-stream'});
+  const url=URL.createObjectURL(dlBlob);
+  const a=document.createElement('a');
+  a.href=url;a.download=name;a.rel='noopener';a.style.display='none';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{try{a.remove();}catch(e){}try{URL.revokeObjectURL(url);}catch(e){}},60000);
+}
+function triggerDataUrlDownload(blob,name){
+  if(!blob) return;
+  if(blob.size>48*1024*1024){
+    notify('ফাইলটি অনেক বড় ('+(blob.size/1024/1024).toFixed(1)+' MB) — বিকল্প ডাউনলোড চেষ্টা হচ্ছে, না হলে শেয়ার / GitHub APK ব্যবহার করুন।','warn');
+  } else {
+    notify('বিকল্প ডাউনলোড (APK / WebView) প্রস্তুত হচ্ছে…','ok');
+  }
+  const reader=new FileReader();
+  reader.onerror=()=>notify('বিকল্প ডাউনলোড ব্যর্থ হয়েছে — শেয়ার বাটন বা GitHub APK ব্যবহার করুন।','err');
+  reader.onloadend=()=>{
+    const dataUrl=String(reader.result||'');
+    if(!dataUrl||dataUrl.indexOf('data:')!==0){notify('ফাইল ডেটা পড়া যায়নি।','err');return;}
+    try{
+      if(window.parent&&window.parent!==window){
+        if(typeof window.parent.__TCS_TRIGGER_DATA_URL__==='function'){
+          window.parent.__TCS_TRIGGER_DATA_URL__(dataUrl,name);
+          notify('ডাউনলোড পাঠানো হয়েছে: '+name,'ok');
+          return;
+        }
+        window.parent.postMessage({type:'TCS_DOWNLOAD_DATA_URL',name:name,dataUrl:dataUrl},'*');
+        notify('ডাউনলোড পাঠানো হয়েছে: '+name,'ok');
+        return;
+      }
+    }catch(e){}
+    try{
+      const a=document.createElement('a');
+      a.href=dataUrl;a.download=name;a.style.display='none';
+      document.body.appendChild(a);a.click();
+      setTimeout(()=>{try{a.remove();}catch(e){}},4000);
+      notify('ডাউনলোড শুরু হয়েছে: '+name,'ok');
+    }catch(e){
+      notify('ডাউনলোড ব্লক হয়েছে — শেয়ার বাটন বা GitHub APK ব্যবহার করুন।','err');
+    }
+  };
+  reader.readAsDataURL(new Blob([blob],{type:'application/octet-stream'}));
+}
 function saveBlob(blob,name){
-  if(window.AndroidBridge && typeof window.AndroidBridge.startFileSave==='function'){
-    notify('ফাইল ফোনের Downloads/LyricStudio ফোল্ডারে সেভ হচ্ছে…','ok');
+  if(!blob||!blob.size){notify('ডাউনলোড করার মতো ফাইল নেই','warn');return;}
+  const bridge=getAndroidBridge();
+  if(bridge){
+    notify('ফাইল ফোনের Downloads/TanvirCreativeStudio ফোল্ডারে সেভ হচ্ছে…','ok');
     const reader=new FileReader();
     reader.onloadend=()=>{
       try{
         const res=String(reader.result||'');
         const b64=res.indexOf(',')>=0?res.split(',')[1]:res;
         const mime=blob.type||'application/octet-stream';
-        const id=window.AndroidBridge.startFileSave(name,mime);
+        const id=bridge.startFileSave(name,mime);
         const chunkSize=262144;
         for(let i=0;i<b64.length;i+=chunkSize){
-          window.AndroidBridge.appendFileChunk(id,b64.slice(i,i+chunkSize));
+          bridge.appendFileChunk(id,b64.slice(i,i+chunkSize));
         }
-        window.AndroidBridge.finishFileSave(id);
+        bridge.finishFileSave(id);
       }catch(e){
         notify('ফাইল সেভ করা যায়নি: '+(e&&e.message?e.message:'error'),'err');
       }
@@ -431,21 +572,83 @@ function saveBlob(blob,name){
     reader.readAsDataURL(blob);
     return;
   }
-  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
+  if(window.parent && window.parent!==window){
+    try{
+      if(window.parent.__TCS_HAS_ANDROID_BRIDGE__){
+        notify('ফাইল ফোনের Downloads ফোল্ডারে সেভ হচ্ছে…','ok');
+        const reader=new FileReader();
+        reader.onloadend=()=>{
+          const res=String(reader.result||'');
+          const b64=res.indexOf(',')>=0?res.split(',')[1]:res;
+          window.parent.postMessage({type:'TCS_SAVE_FILE',name:name,mime:blob.type||'application/octet-stream',base64:b64},'*');
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+    }catch(e){}
+    // Synchronous top-level download (preserves user click gesture on same-origin / srcdoc)
+    try{
+      if(typeof window.parent.__TCS_TRIGGER_DOWNLOAD__==='function'){
+        window.parent.__TCS_TRIGGER_DOWNLOAD__(blob,name);
+        notify('ডাউনলোড শুরু হয়েছে: '+name+' (না হলে নিচের বিকল্প ডাউনলোড চাপুন)','ok');
+        return;
+      }
+    }catch(e){}
+    // Cross-origin parent fallback via transferable ArrayBuffer
+    try{
+      const r=new FileReader();
+      r.onloadend=()=>{
+        const buf=r.result;
+        try{
+          if(buf instanceof ArrayBuffer){
+            window.parent.postMessage({type:'TCS_DOWNLOAD_FILE',name:name,mime:blob.type||'application/octet-stream',buffer:buf},'*',[buf]);
+            return;
+          }
+        }catch(e){}
+        try{window.parent.postMessage({type:'TCS_DOWNLOAD_FILE',name:name,mime:blob.type||'application/octet-stream',buffer:buf},'*');}catch(e2){}
+      };
+      r.readAsArrayBuffer(blob);
+      notify('ডাউনলোড শুরু হয়েছে: '+name+' (না হলে নিচের বিকল্প ডাউনলোড চাপুন)','ok');
+      return;
+    }catch(e){}
+  }
+  triggerLocalDownload(blob,name);
+  notify('ডাউনলোড শুরু হয়েছে: '+name+' (না হলে নিচের বিকল্প ডাউনলোড চাপুন)','ok');
 }
 function handleDownloadRendered(ev){
-  if(window.AndroidBridge && lastBlob){
-    if(ev) ev.preventDefault();
-    saveBlob(lastBlob,'lyric-video.'+lastExt);
-    return false;
-  }
-  return true;
+  if(ev) ev.preventDefault();
+  if(!lastBlob||!lastBlob.size){notify('আগে ভিডিও রেন্ডার করো','warn');return false;}
+  saveBlob(lastBlob,'lyric-video.'+lastExt);
+  return false;
 }
+function downloadRenderedAlt(){
+  if(!lastBlob||!lastBlob.size){notify('আগে ভিডিও রেন্ডার করো','warn');return;}
+  if(getAndroidBridge()){saveBlob(lastBlob,'lyric-video.'+lastExt);return;}
+  triggerDataUrlDownload(lastBlob,'lyric-video.'+lastExt);
+}
+window.pauseAll=function(){
+  try{audio.pause();}catch(e){}
+  try{if(bgMedia&&bgMedia.pause)bgMedia.pause();}catch(e){}
+};
+window.addEventListener('message',function(ev){
+  const msg=ev&&ev.data;
+  if(!msg||typeof msg!=='object') return;
+  if(msg.type==='TCS_IMPORT_LYRICS'&&typeof msg.text==='string'&&msg.text.trim()){
+    $('ly').value=msg.text.trim();
+    updateLiveLineCount();
+    parseLyrics();
+    go(1);
+    notify('ট্রান্সলেটর থেকে লিরিক চলে এসেছে!','ok');
+  }
+});
+const TAB_ORDER=[1,2,5,3,4];
 window.onAndroidBack=function(){
   if(fsOpen){closeFullscreenPreview();return true;}
-  if(curPage>1){go(curPage-1);return true;}
+  const idx=TAB_ORDER.indexOf(curPage);
+  if(idx>0){go(TAB_ORDER[idx-1]);return true;}
   return false;
 };
+if(window.self!==window.top){document.body.classList.add('embedded');}
 
 function go(n){
   curPage=n;
@@ -453,7 +656,11 @@ function go(n){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   $('p'+n).classList.add('active');
   $('t'+n).classList.add('active');
-  if(n>=2 && !lyrics.length) parseLyrics();
+  const lock=(n===2);
+  document.documentElement.classList.toggle('manual-lock',lock);
+  document.body.classList.toggle('manual-sync-active',lock);
+  if(n!==1 && !lyrics.length) parseLyrics();
+  if(n===2 || n===5) renderSync();
 }
 
 /* ---------- গান ---------- */
@@ -516,8 +723,15 @@ function resetTrim(){
 }
 audio.addEventListener('error',()=>{if(audio.getAttribute('src')) notify('গানটা লোড করা যায়নি, অন্য ফাইল চেষ্টা করো','err');});
 ['timeupdate','loadedmetadata','durationchange','seeked'].forEach(ev=>audio.addEventListener(ev,updateTimeUI));
-audio.addEventListener('play',()=>{$('playBtn').innerText='⏸ থামাও';});
-['pause','ended'].forEach(ev=>audio.addEventListener(ev,()=>{$('playBtn').innerText='▶ চালাও';}));
+let lastActivePlayIdx=-2;
+audio.addEventListener('play',()=>{
+  $('playBtn').innerText='⏸ থামাও';
+  if($('playBtn5')) $('playBtn5').innerText='⏸ থামাও';
+});
+['pause','ended'].forEach(ev=>audio.addEventListener(ev,()=>{
+  $('playBtn').innerText='▶ চালাও';
+  if($('playBtn5')) $('playBtn5').innerText='▶ চালাও';
+}));
 function updateTimeUI(){
   const b=getTrimBounds();
   if(!rec && !audio.paused){
@@ -526,14 +740,26 @@ function updateTimeUI(){
     else if(isFinite(b.end)&&b.end>b.start&&cur>=b.end){audio.pause();audio.currentTime=b.end;}
   }
   const t=audio.currentTime||0, d=audio.duration;
-  $('time').innerText=format(t)+' / '+format(d);
-  $('prog').style.width=(isFinite(d)&&d>0?Math.min(100,t/d*100):0)+'%';
+  const txt=format(t)+' / '+format(d);
+  const pct=(isFinite(d)&&d>0?Math.min(100,t/d*100):0)+'%';
+  $('time').innerText=txt;
+  $('prog').style.width=pct;
+  if($('time5')) $('time5').innerText=txt;
+  if($('prog5')) $('prog5').style.width=pct;
+  const activeNow=lineAt(t);
+  if(activeNow!==lastActivePlayIdx){
+    lastActivePlayIdx=activeNow;
+    ['syncList','syncList5'].forEach(listId=>{
+      const box=$(listId); if(!box) return;
+      box.querySelectorAll('.sync-row').forEach((row,idx)=>row.classList.toggle('active-play',idx===activeNow));
+    });
+  }
   updateTrimInfoUI();
 }
-function seekBar(e){
+function seekBar(e,barId){
   const d=audio.duration; if(!d||!isFinite(d)) return;
   const b=getTrimBounds();
-  const r=$('progBar').getBoundingClientRect();
+  const r=$(barId||'progBar').getBoundingClientRect();
   const pct=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
   audio.currentTime=Math.max(b.start,Math.min(b.end,pct*d));
 }
@@ -589,11 +815,21 @@ function jumpToLine(i,e){
   }
   renderSync();
 }
+function stepLine(delta){
+  if(!lyrics.length) return;
+  selectedIdx=Math.max(0,Math.min(lyrics.length-1,selectedIdx+delta));
+  renderSync();
+}
+function setSyncFeedback(msg){
+  if($('syncMsg')) $('syncMsg').innerText=msg;
+  if($('syncMsg5')) $('syncMsg5').innerText=msg;
+}
 function renderSync(){
   const activePlay=lineAt(audio.currentTime||0);
-  $('syncList').innerHTML=lyrics.map((l,i)=>{
+  lastActivePlayIdx=activePlay;
+  const rowsHtml=lyrics.map((l,i)=>{
     const isGap=l==='♪';
-    const short=isGap?'♪ (বিরতি / Instrumental)':(l.length>32?l.slice(0,32)+'…':l);
+    const short=isGap?'♪ (বিরতি / Instrumental)':(l.length>34?l.slice(0,34)+'…':l);
     const tm=times[i]==null?'—':format(times[i]);
     let dur='';
     if(times[i]!=null){
@@ -603,22 +839,27 @@ function renderSync(){
     }
     const cls='sync-row'+(i===selectedIdx?' selected':'')+(i===activePlay?' active-play':'');
     return '<div class="'+cls+'" onclick="selectLine('+i+')">'
-      +'<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="mono" style="opacity:.6;margin-right:6px">'+String(i+1).padStart(2,'0')+'</span>'+esc(short)+'</span>'
-      +'<span style="display:flex;align-items:center;gap:8px;flex-shrink:0"><span class="mono muted">'+tm+dur+'</span>'
-      +(times[i]!=null?'<button class="btn btn-dark btn-sm" style="flex:none;min-height:26px;padding:2px 8px" onclick="jumpToLine('+i+',event)">Go</button>':'')
+      +'<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px"><span class="mono" style="opacity:.6;margin-right:6px;font-size:11px">'+String(i+1).padStart(2,'0')+'</span>'+esc(short)+'</span>'
+      +'<span style="display:flex;align-items:center;gap:6px;flex-shrink:0"><span class="mono muted" style="font-size:11px">'+tm+dur+'</span>'
+      +(times[i]!=null?'<button class="btn btn-dark btn-sm" style="flex:none;min-height:24px;padding:2px 7px;font-size:11px" onclick="jumpToLine('+i+',event)">Go</button>':'')
       +'</span></div>';
   }).join('');
+  $('syncList').innerHTML=rowsHtml;
+  if($('syncList5')) $('syncList5').innerHTML=rowsHtml;
   const syncedCount=times.filter(t=>t!=null).length;
   $('lineInfo').innerText='সিংক '+syncedCount+'/'+lyrics.length;
+  if($('lineInfo5')) $('lineInfo5').innerText='সিংক '+syncedCount+'/'+lyrics.length;
+  if($('nextLineIdx')) $('nextLineIdx').innerText=lyrics.length?('এখন ট্যাপের লাইন #'+(selectedIdx+1)+' / '+lyrics.length):'কোনো লিরিক নেই';
+  if($('nextLineTime')) $('nextLineTime').innerText=(times[selectedIdx]!=null)?format(times[selectedIdx]):'সিংক বাকি';
   $('nextLine').innerText = selectedIdx<lyrics.length
-    ? 'নির্বাচিত লাইন #'+(selectedIdx+1)+': '+(lyrics[selectedIdx]==='♪'?'♪ (বিরতি)':lyrics[selectedIdx])
-    : (lyrics.length?'সব লাইন মার্ক হয়েছে ✅':'');
+    ? (lyrics[selectedIdx]==='♪'?'♪ (বিরতি / Instrumental)':lyrics[selectedIdx])
+    : (lyrics.length?'সব লাইন মার্ক হয়েছে ✅':'আগে গান ট্যাবে লিরিক লিখুন');
   if($('manualLineTimeInput')){
     const st=times[selectedIdx];
     $('manualLineTimeInput').value=(st!=null&&isFinite(st))?st.toFixed(1):'';
   }
   const selRow=$('syncList').querySelector('.sync-row.selected');
-  if(selRow && selRow.scrollIntoView) selRow.scrollIntoView({block:'nearest'});
+  if(selRow && selRow.scrollIntoView) selRow.scrollIntoView({block:'center',behavior:'smooth'});
 }
 
 /* ---------- প্লে / সিংক ---------- */
@@ -659,14 +900,13 @@ function insertGap(){
 function adjust(d){
   const target=times[selectedIdx]!=null?selectedIdx:(selectedIdx>0&&times[selectedIdx-1]!=null?selectedIdx-1:-1);
   if(target<0){notify('আগে কোনো লাইন সিংক বা সিলেক্ট করো','warn');return;}
+  const b=getTrimBounds();
   pushUndo();
-  times[target]=Math.max(0,(times[target]||0)+d);
+  times[target]=Math.max(b.start,Math.min(b.end,Number(((times[target]||0)+d).toFixed(3))));
   renderSync(); store('times',times);
 }
-function applyBatchOffset(){
-  const raw=$('batchOffsetInput').value.trim();
-  const off=Number(raw);
-  if(!raw||!isFinite(off)||off===0){notify('সঠিক সেকেন্ডের মান দাও (যেমন: 0.5 বা -0.5)','warn');return;}
+function quickBatchOffset(off){
+  if(!isFinite(off)||off===0) return;
   const cnt=times.filter(t=>t!=null).length;
   if(!cnt){notify('এখনো কোনো লাইন সিংক করা হয়নি','warn');return;}
   pushUndo();
@@ -674,15 +914,14 @@ function applyBatchOffset(){
   times=times.map(t=>t==null?null:Math.max(b.start,Math.min(b.end,Number((t+off).toFixed(3)))));
   renderSync(); store('times',times);
   const lbl=(off>0?'+'+off:off)+'s';
-  $('syncMsg').innerText='✅ সব '+cnt+'টি লাইনের সময় '+lbl+' সরানো হয়েছে।';
+  setSyncFeedback('✅ সব '+cnt+'টি লাইনের সময় '+lbl+' সরানো হয়েছে।');
   notify('সব সিংকড লাইনের সময় '+lbl+' পরিবর্তন হয়েছে','ok');
 }
-function setSyncMode(mode){
-  const isAuto=mode==='auto';
-  $('modeManualBtn').classList.toggle('sel',!isAuto);
-  $('modeAutoBtn').classList.toggle('sel',isAuto);
-  $('manualSyncPane').style.display=isAuto?'none':'block';
-  $('autoSyncPane').style.display=isAuto?'block':'none';
+function applyBatchOffset(){
+  const raw=$('batchOffsetInput').value.trim();
+  const off=Number(raw);
+  if(!raw||!isFinite(off)||off===0){notify('সঠিক সেকেন্ডের মান দাও (যেমন: 0.5 বা -0.5)','warn');return;}
+  quickBatchOffset(off);
 }
 function saveIntroSec(){
   const v=Number($('introSecondsInput').value);
@@ -706,7 +945,7 @@ function setManualLineTime(){
   pushUndo();
   times[selectedIdx]=Math.max(b.start,Math.min(b.end,Number(sec.toFixed(3))));
   renderSync(); store('times',times);
-  $('syncMsg').innerText='✅ লাইন #'+(selectedIdx+1)+' এর সময় '+times[selectedIdx].toFixed(1)+'s সেট হয়েছে।';
+  setSyncFeedback('✅ লাইন #'+(selectedIdx+1)+' এর সময় '+times[selectedIdx].toFixed(1)+'s সেট হয়েছে।');
 }
 function alignSyncToIntro(){
   const firstIdx=times.findIndex(t=>t!=null);
@@ -719,7 +958,7 @@ function alignSyncToIntro(){
   pushUndo();
   times=times.map(t=>t==null?null:Math.max(b.start,Math.min(b.end,Number((t+delta).toFixed(3)))));
   renderSync(); store('times',times);
-  $('syncMsg').innerText='✅ ১ম লাইন '+targetStart.toFixed(1)+'s-এ এনে সব লাইনের সিংক ঠিক করা হয়েছে।';
+  setSyncFeedback('✅ ১ম লাইন '+targetStart.toFixed(1)+'s-এ এনে সব লাইনের সিংক ঠিক করা হয়েছে।');
   notify('ইন্ট্রো অনুযায়ী সিংক ঠিক করা হয়েছে!','ok');
 }
 function autoSync(){
@@ -737,9 +976,9 @@ function autoSync(){
   const per=total/lyrics.length;
   const startAt=b.start+lead;
   times=lyrics.map((_,i)=>Number((startAt+i*per).toFixed(3)));
-  selectedIdx=lyrics.length-1;
+  selectedIdx=0;
   renderSync(); store('times',times);
-  $('syncMsg').innerText='✅ '+b.start.toFixed(1)+'s–'+b.end.toFixed(1)+'s সীমায় শুরুর '+lead.toFixed(1)+'s ইন্ট্রো রেখে '+lyrics.length+'টি লাইন অটো সিংক হয়েছে।';
+  setSyncFeedback('✅ '+b.start.toFixed(1)+'s–'+b.end.toFixed(1)+'s সীমায় শুরুর '+lead.toFixed(1)+'s ইন্ট্রো রেখে '+lyrics.length+'টি লাইন অটো সিংক হয়েছে।');
   notify('অটো সিংক সম্পন্ন ('+lead.toFixed(1)+'s ইন্ট্রো)','ok');
 }
 function lineAt(t){
@@ -783,9 +1022,9 @@ function setBg(t){
 function setRatio(r){
   ratio=r;
   const [w,h]=PREV[r];
-  ['c2','c3'].forEach(id=>{const c=$(id);c.width=w;c.height=h;});
-  ['prevWrap2','prevWrap3'].forEach(id=>{
-    const p=$(id);
+  ['c2','c3','c5'].forEach(id=>{const c=$(id);if(c){c.width=w;c.height=h;}});
+  ['prevWrap2','prevWrap3','prevWrap5'].forEach(id=>{
+    const p=$(id); if(!p) return;
     p.style.aspectRatio=w+'/'+h;
     p.style.maxWidth=r==='16:9'?'':(r==='9:16'?'230px':'340px');
   });
@@ -811,8 +1050,14 @@ function updateDesign(){
   $('bgOverlayOpacityVal').innerText=$('bgOverlayOpacity').value;
   const spd=Math.min(2,Math.max(0.25,+$('bgSpeed').value||1));
   $('bgSpeedVal').innerText=spd.toFixed(2);
+  const tspd=Math.min(2,Math.max(0.1,$('transitionSpeed')?(+$('transitionSpeed').value||0.4):0.4));
+  if($('transitionSpeedVal')) $('transitionSpeedVal').innerText=tspd.toFixed(2);
   if(bgMedia && bgMedia.tagName==='VIDEO'){bgMedia.playbackRate=spd;}
   $('shadowOffsetVal').innerText=$('shadowOffset').value;
+  if($('shadowOffset')&&$('textShadow')){
+    $('shadowOffset').disabled=!$('textShadow').checked;
+    $('shadowOffset').style.opacity=$('textShadow').checked?'1':'0.45';
+  }
   if($('textColor')&&$('textGrad')){
     $('textColor').disabled=$('textGrad').checked;
     $('textColor').style.opacity=$('textGrad').checked?'0.4':'1';
@@ -832,6 +1077,7 @@ function updateDesign(){
     ratio:ratio,
     bgType:(bgType==='image'||bgType==='video')?'rain':bgType,
     animation:$('animSel').value,
+    transitionSpeed:tspd,
     bouncingAnimation:$('bouncingAnim').checked,
     showNext:$('showNext').checked,
     textShadow:$('textShadow').checked,
@@ -989,7 +1235,8 @@ function drawText(ctx,w,h,k,text,nextText,kind,elapsed){
     if(fits || size<=11*k) break;
     size-=2*k;
   }
-  const p=Math.min(1,Math.max(0,(elapsed==null?1:elapsed)/0.4));
+  const animDur=Math.min(2,Math.max(0.1,$('transitionSpeed')?(+$('transitionSpeed').value||0.4):0.4));
+  const p=Math.min(1,Math.max(0,(elapsed==null?1:elapsed)/animDur));
   const ease=1-Math.pow(1-p,3);
   let alpha=1, oy=0, sc=1;
   if(anim==='Fade'||anim==='fade') alpha=ease;
@@ -1120,7 +1367,7 @@ document.addEventListener('keydown',e=>{
   if(e.altKey) return;
   const k=e.key.toLowerCase();
   if(e.ctrlKey||e.metaKey){
-    if(k==='z'&&!e.shiftKey&&curPage===2&&!e.repeat){e.preventDefault();undoMark();}
+    if(k==='z'&&!e.shiftKey&&(curPage===2||curPage===5)&&!e.repeat){e.preventDefault();undoMark();}
     return;
   }
   if(e.code==='Space'||e.key===' '){
@@ -1134,7 +1381,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowRight'){e.preventDefault();seekRel(e.shiftKey?1:5);return;}
   if(k==='m'){if(!e.repeat){e.preventDefault();markLine();}return;}
   if(k==='g'){if(!e.repeat){e.preventDefault();insertGap();}return;}
-  if(curPage===2){
+  if(curPage===2||curPage===5){
     if(e.key==='ArrowUp'){e.preventDefault();if(lyrics.length){selectedIdx=Math.max(0,selectedIdx-1);renderSync();}return;}
     if(e.key==='ArrowDown'){e.preventDefault();if(lyrics.length){selectedIdx=Math.min(lyrics.length-1,selectedIdx+1);renderSync();}return;}
     if(e.key==='['){e.preventDefault();adjust(-0.1);return;}
@@ -1151,9 +1398,9 @@ function loop(){
     const fc=$('cFs');
     drawScene(fc.getContext('2d'),fc.width,fc.height,d.text,d.next,'lyric',d.elapsed);
   }
-  if(curPage!==2 && curPage!==3) return;
-  const c=$(curPage===2?'c2':'c3');
-  drawScene(c.getContext('2d'),c.width,c.height,d.text,d.next,'lyric',d.elapsed);
+  if(curPage!==2 && curPage!==3 && curPage!==5) return;
+  const c=$(curPage===2?'c2':curPage===5?'c5':'c3');
+  if(c) drawScene(c.getContext('2d'),c.width,c.height,d.text,d.next,'lyric',d.elapsed);
 }
 
 /* ---------- ভিডিও রেকর্ডিং ---------- */
@@ -1171,7 +1418,7 @@ function ensureAudioGraph(){
 }
 function pickMime(fmt){
   const c=fmt==='mp4'
-    ? ['video/mp4;codecs=avc1.4d002a,mp4a.40.2','video/mp4;codecs=avc1,mp4a.40.2','video/mp4;codecs=h264,aac','video/mp4']
+    ? ['video/mp4;codecs=avc1.4d002a,mp4a.40.2','video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1,mp4a.40.2','video/mp4;codecs=avc1.42E01E,opus','video/mp4;codecs=avc1,opus','video/mp4;codecs=h264,aac','video/mp4']
     : ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
   return c.find(m=>MediaRecorder.isTypeSupported(m))||'';
 }
@@ -1218,28 +1465,43 @@ async function makeVideo(forceUnsynced,targetFormat){
     introText:introText,outroText:outroText,introDur:introText?3:0,outroDur:outroText?3:0,
     startedSong:false
   };
+  let recWakeLock=null;
+  try{if(navigator.wakeLock&&navigator.wakeLock.request)recWakeLock=await navigator.wakeLock.request('screen');}catch(e){}
   recChunks=[]; rec=mr; activeRecFormat=fmt;
   mr.ondataavailable=e=>{if(e.data&&e.data.size)recChunks.push(e.data);};
   mr.onstop=()=>{
+    try{if(recWakeLock)recWakeLock.release();}catch(e){}
+    recWakeLock=null;
     const type=((mr.mimeType||mime||(activeRecFormat==='mp4'?'video/mp4':'video/webm')).split(';')[0]);
     const blob=new Blob(recChunks,{type:type});
-    rec=null; recState=null; lastBlob=blob; lastExt=(activeRecFormat==='mp4'||type.includes('mp4'))?'mp4':'webm';
+    rec=null; recState=null;
     $('mkMp4Btn').innerText='🎬 Render MP4'; $('mkBtn').innerText='🎥 Render WebM';
     $('mkMp4Btn').disabled=false; $('mkBtn').disabled=false;
+    if(!blob.size){
+      $('vprog').style.width='0%';
+      $('vstatus').innerText='❌ ভিডিও ডেটা তৈরি হয়নি — অন্য ফরম্যাট (WebM) চেষ্টা করো।';
+      notify('ভিডিও ডেটা তৈরি হয়নি — অনুগ্রহ করে Render WebM চেষ্টা করো!','err');
+      return;
+    }
+    lastBlob=blob; lastExt=(activeRecFormat==='mp4'||type.includes('mp4'))?'mp4':'webm';
     $('vprog').style.width='100%';
     if(recUrl) URL.revokeObjectURL(recUrl);
     recUrl=URL.createObjectURL(blob);
     const v=$('rv'); v.src=recUrl; v.style.display='block';
     const dl=$('dl'); dl.href=recUrl; dl.download='lyric-video.'+lastExt; dl.innerText='⬇ '+lastExt.toUpperCase()+' ডাউনলোড'; dl.style.display='flex';
-    $('shareBtn').style.display=(navigator.canShare&&navigator.canShare({files:[new File([blob],'lyric-video.'+lastExt,{type:type})]}))?'flex':'none';
+    if($('dlAlt')) $('dlAlt').style.display='flex';
+    if($('dlHelp')) $('dlHelp').style.display='block';
+    let canSh=false;
+    try{canSh=typeof navigator.share==='function';}catch(e){}
+    $('shareBtn').style.display=canSh?'flex':'none';
     $('vstatus').innerText='✅ '+lastExt.toUpperCase()+' ভিডিও তৈরি হয়েছে ('+(blob.size/1024/1024).toFixed(1)+' MB)';
     notify(lastExt.toUpperCase()+' ভিডিও রেন্ডার সম্পন্ন হয়েছে!','ok');
   };
   audio.pause(); audio.currentTime=tb.start;
-  $('rv').style.display='none'; $('dl').style.display='none'; $('shareBtn').style.display='none';
+  $('rv').style.display='none'; $('dl').style.display='none'; if($('dlAlt'))$('dlAlt').style.display='none'; if($('dlHelp'))$('dlHelp').style.display='none'; $('shareBtn').style.display='none';
   if(fmt==='mp4'){$('mkMp4Btn').innerText='⏹ MP4 বন্ধ করো';$('mkBtn').disabled=true;}
   else{$('mkBtn').innerText='⏹ WebM বন্ধ করো';$('mkMp4Btn').disabled=true;}
-  mr.start(1000);
+  mr.start(250);
   if(!introText){
     recState.startedSong=true;
     audio.play().catch(()=>{notify('গান চালানো যায়নি','err');stopRecording();});
@@ -1290,11 +1552,19 @@ function stopRecording(){
   if(recRaf){cancelAnimationFrame(recRaf);recRaf=null;}
   if(!rec) return;
   audio.pause();
+  try{if(rec.state==='recording'&&typeof rec.requestData==='function')rec.requestData();}catch(e){}
   try{rec.stop();}catch(e){}
 }
 async function shareVideo(){
-  if(!lastBlob) return;
-  try{await navigator.share({files:[new File([lastBlob],'lyric-video.'+lastExt,{type:lastBlob.type})]});}catch(e){}
+  if(!lastBlob||!lastBlob.size){notify('আগে ভিডিও রেন্ডার করো','warn');return;}
+  if(typeof navigator.share!=='function'){notify('এই অ্যাপে শেয়ার সাপোর্ট নেই — বিকল্প ডাউনলোড চাপো','warn');return;}
+  try{
+    const f=new File([lastBlob],'lyric-video.'+lastExt,{type:lastBlob.type||(lastExt==='mp4'?'video/mp4':'video/webm')});
+    await navigator.share({files:[f],title:'lyric-video.'+lastExt});
+  }catch(e){
+    if(e&&e.name==='AbortError') return;
+    notify('এই WebView-তে ফাইল শেয়ার ব্লক আছে — বিকল্প ডাউনলোড বা GitHub APK ব্যবহার করো','warn');
+  }
 }
 
 /* ---------- LRC / প্রজেক্ট / থাম্বনেইল / টেস্ট ---------- */
@@ -1330,6 +1600,7 @@ function applySavedDesign(d){
     const a=String(rawAnim);
     $('animSel').value=(a==='Fade'||a==='fade')?'Fade':(a==='None'||a==='none')?'None':'Slide';
   }
+  if(d.transitionSpeed!=null && isFinite(Number(d.transitionSpeed))) $('transitionSpeed').value=Math.min(2,Math.max(0.1,Number(d.transitionSpeed)));
   if(typeof d.bouncingAnimation==='boolean') $('bouncingAnim').checked=d.bouncingAnimation;
   if(typeof d.showNext==='boolean') $('showNext').checked=d.showNext;
   else if(typeof d.showNextLine==='boolean') $('showNext').checked=d.showNextLine;
@@ -1373,6 +1644,7 @@ function exportProjectJson(){
       bgType:(bgType==='image'||bgType==='video')?'rain':bgType,
       bgTheme:(bgType==='image'||bgType==='video')?'rain':bgType,
       transitionStyle:$('animSel').value,
+      transitionSpeed:Math.min(2,Math.max(0.1,+$('transitionSpeed').value||0.4)),
       animation:$('animSel').value,
       bouncingAnimation:$('bouncingAnim').checked,
       showNext:$('showNext').checked,
@@ -1451,14 +1723,14 @@ function makeThumbnail(){
 }
 function testAll(){
   const row=(n,ok,extra)=>'<div>'+(ok?'✅ ':'⚠️ ')+'<b>'+n+'</b>: '+(ok?'OK':'FAIL'+(extra?' — '+extra:''))+'</div>';
-  let ls=false;try{localStorage.setItem('_t','1');localStorage.removeItem('_t');ls=true;}catch(e){}
+  let ls=false;try{ls=store('_t','1');const st=getSafeStorage();if(st)st.removeItem('_t');}catch(e){}
   let cv=false;try{cv=!!document.createElement('canvas').getContext('2d');}catch(e){}
   $('testResult').innerHTML=
     row('Lyrics',lyrics.length>0,'লিরিক লিখুন')+
     row('Audio',!!audio.getAttribute('src'),'গান বাছাই করুন')+
     row('Synced Times',times.some(t=>t!=null),'সিঙ্ক বা অটো ভাগ করুন')+
     row('Canvas 2D',cv)+
-    row('localStorage',ls)+
+    row('Storage',ls)+
     row('Video Recorder',typeof MediaRecorder!=='undefined'&&!!HTMLCanvasElement.prototype.captureStream);
 }
 
@@ -1491,6 +1763,7 @@ function testAll(){
       const a=String(rawAnim);
       $('animSel').value=(a==='Fade'||a==='fade')?'Fade':(a==='None'||a==='none')?'None':'Slide';
     }
+    if(d.transitionSpeed!=null && isFinite(Number(d.transitionSpeed))) $('transitionSpeed').value=Math.min(2,Math.max(0.1,Number(d.transitionSpeed)));
     if(typeof d.bouncingAnimation==='boolean') $('bouncingAnim').checked=d.bouncingAnimation;
     if(typeof d.showNext==='boolean') $('showNext').checked=d.showNext;
     else if(typeof d.showNextLine==='boolean') $('showNext').checked=d.showNextLine;
@@ -1520,6 +1793,64 @@ function testAll(){
   setBg(bgType);
   updateLiveLineCount();
   renderSync();
+function getCurrentDesignPayload(){
+  return {
+    fontSize:+$('fontSize').value,
+    letterSpacing:+$('letterSpacing').value,
+    darkness:+$('darkness').value,
+    bgBlur:+$('bgBlur').value,
+    bgFade:+$('bgFade').value,
+    bgOverlayColor:$('bgOverlayColor').value,
+    bgOverlayOpacity:+$('bgOverlayOpacity').value,
+    videoFilter:$('videoFilter').value,
+    bgSpeed:Math.min(2,Math.max(0.25,+$('bgSpeed').value||1)),
+    font:$('fontSel').value,
+    ratio:ratio,
+    bgType:(bgType==='image'||bgType==='video')?'rain':bgType,
+    bgTheme:(bgType==='image'||bgType==='video')?'rain':bgType,
+    transitionStyle:$('animSel').value,
+    transitionSpeed:Math.min(2,Math.max(0.1,+$('transitionSpeed').value||0.4)),
+    animation:$('animSel').value,
+    bouncingAnimation:$('bouncingAnim').checked,
+    showNext:$('showNext').checked,
+    showNextLine:$('showNext').checked,
+    textShadow:$('textShadow').checked,
+    shadowOffset:+$('shadowOffset').value,
+    textOutline:$('textOutline').checked,
+    textGlow:$('textGlow').checked,
+    textColor:$('textColor').value,
+    textGradientEnabled:$('textGrad').checked,
+    textGradientStart:$('gradStart').value,
+    textGradientEnd:$('gradEnd').value,
+    textAlign:textAlign,
+    intro:$('intro').value,
+    outro:$('outro').value
+  };
+}
+const AUTO_SAVE_INTERVAL_MS=30000;
+let autoSaveTimer=null, autoSaveDirty=false;
+function flushAutoSave(){
+  if(autoSaveTimer){clearTimeout(autoSaveTimer);autoSaveTimer=null;}
+  const parsed=$('ly').value.split('\n').map(x=>x.trim()).filter(Boolean);
+  const changed=parsed.length>0 && parsed.join('\n')!==lyrics.join('\n');
+  const lyToSave=changed?parsed:lyrics;
+  const tmToSave=changed?parsed.map((l,i)=>(lyrics[i]===l&&times[i]!=null)?times[i]:null):times;
+  store('lyrics',lyToSave);
+  store('times',tmToSave);
+  store('design',getCurrentDesignPayload());
+  autoSaveDirty=false;
+}
+function scheduleAutoSave(){
+  autoSaveDirty=true;
+  if(autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer=setTimeout(()=>{autoSaveTimer=null;if(autoSaveDirty)flushAutoSave();},AUTO_SAVE_INTERVAL_MS);
+}
+$('ly').addEventListener('input',scheduleAutoSave);
+document.addEventListener('input',e=>{if(e.target&&e.target.closest&&e.target.closest('#p2,#p3,#p5'))scheduleAutoSave();});
+document.addEventListener('change',e=>{if(e.target&&e.target.closest&&e.target.closest('#p2,#p3,#p5'))scheduleAutoSave();});
+setInterval(()=>{if(autoSaveDirty)flushAutoSave();},AUTO_SAVE_INTERVAL_MS);
+window.addEventListener('pagehide',()=>{if(autoSaveDirty)flushAutoSave();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&autoSaveDirty)flushAutoSave();});
   ensureFonts();
   loop();
 })();

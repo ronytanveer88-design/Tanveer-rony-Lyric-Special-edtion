@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AudioLyricsTab } from './components/AudioLyricsTab';
+import { AutoSyncTab } from './components/AutoSyncTab';
 import { DesignTab } from './components/DesignTab';
 import { ExportTab } from './components/ExportTab';
 import { FullscreenPreviewModal } from './components/FullscreenPreviewModal';
@@ -7,6 +8,7 @@ import { PreviewStage } from './components/PreviewStage';
 import { SyncTab } from './components/SyncTab';
 import { MobileBottomNav, TopBar } from './components/TopBar';
 import {
+  CreativeSuiteApp,
   DEFAULT_DESIGN,
   DEFAULT_LYRICS,
   DesignConfig,
@@ -24,6 +26,7 @@ import {
   loadFromStorage,
   saveToStorage,
   triggerBlobDownload,
+  triggerDataUrlDownload,
 } from './utils/storage';
 
 interface UndoSnapshot {
@@ -39,6 +42,8 @@ const VALID_FONTS = [
   'Noto Serif Bengali',
   'Plus Jakarta Sans',
 ] as const;
+
+const AUTO_SAVE_INTERVAL_MS = 30_000;
 
 function sanitizeDesignConfig(saved: Partial<DesignConfig> | null | undefined): DesignConfig {
   if (!saved || typeof saved !== 'object') return DEFAULT_DESIGN;
@@ -97,6 +102,10 @@ function sanitizeDesignConfig(saved: Partial<DesignConfig> | null | undefined): 
     ratio: saved.ratio && PREVIEW_DIMENSIONS[saved.ratio] ? saved.ratio : '16:9',
     bgTheme: validBg,
     transitionStyle,
+    transitionSpeed:
+      saved.transitionSpeed !== undefined && Number.isFinite(Number(saved.transitionSpeed))
+        ? Math.min(2, Math.max(0.1, Number(saved.transitionSpeed)))
+        : DEFAULT_DESIGN.transitionSpeed,
     bouncingAnimation:
       saved.bouncingAnimation !== undefined
         ? Boolean(saved.bouncingAnimation)
@@ -139,6 +148,12 @@ function sanitizeDesignConfig(saved: Partial<DesignConfig> | null | undefined): 
 }
 
 export default function App() {
+  const [activeSuiteApp, setActiveSuiteApp] = useState<CreativeSuiteApp>('lyrics');
+  const [loadedSuiteApps, setLoadedSuiteApps] = useState<Record<Exclude<CreativeSuiteApp, 'lyrics'>, boolean>>({
+    cinema: false,
+    intro: false,
+    translator: false,
+  });
   const [activeTab, setActiveTab] = useState<StudioTab>('lyrics');
 
   // Initialize from localStorage cleanly — fixing the original `st[i] > 0` bug with `>= 0`
@@ -253,7 +268,7 @@ export default function App() {
 
   // Persist design changes
   const updateDesign = useCallback((patch: Partial<DesignConfig>) => {
-    if (patch.transitionStyle !== undefined) {
+    if (patch.transitionStyle !== undefined || patch.transitionSpeed !== undefined) {
       previewAnimStartRef.current = performance.now();
     }
     setDesign((prev) => {
@@ -265,6 +280,101 @@ export default function App() {
       return next;
     });
   }, []);
+
+  // Debounced auto-save for lyrics, times, and design every 30 seconds
+  const latestAutoSaveRef = useRef({ lyrics, lyricsText, times, design });
+  latestAutoSaveRef.current = { lyrics, lyricsText, times, design };
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const autoSaveDirtyRef = useRef<boolean>(false);
+  const hasMountedAutoSaveRef = useRef<boolean>(false);
+
+  const flushAutoSave = useCallback((): boolean => {
+    if (autoSaveTimerRef.current !== null) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    const {
+      lyrics: curLyrics,
+      lyricsText: curLyricsText,
+      times: curTimes,
+      design: curDesign,
+    } = latestAutoSaveRef.current;
+
+    const parsedLines = curLyricsText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const hasUnconfirmedText =
+      parsedLines.length > 0 && parsedLines.join('\n') !== curLyrics.join('\n');
+
+    const lyricsToSave = hasUnconfirmedText ? parsedLines : curLyrics;
+    const timesToSave = hasUnconfirmedText
+      ? parsedLines.map((line, i) =>
+          curLyrics[i] === line && curTimes[i] !== null ? curTimes[i] : null
+        )
+      : curTimes;
+
+    const savedLyrics = saveToStorage('lyrics', lyricsToSave);
+    const savedTimes = saveToStorage('times', timesToSave);
+    const savedDesign = saveToStorage('design', {
+      ...curDesign,
+      bgTheme:
+        curDesign.bgTheme === 'image' || curDesign.bgTheme === 'video' ? 'rain' : curDesign.bgTheme,
+    });
+    autoSaveDirtyRef.current = false;
+    return savedLyrics && savedTimes && savedDesign;
+  }, []);
+
+  useEffect(() => {
+    if (!hasMountedAutoSaveRef.current) {
+      hasMountedAutoSaveRef.current = true;
+      return;
+    }
+    autoSaveDirtyRef.current = true;
+    if (autoSaveTimerRef.current !== null) {
+      window.clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      if (autoSaveDirtyRef.current) {
+        flushAutoSave();
+      }
+    }, AUTO_SAVE_INTERVAL_MS);
+  }, [lyrics, lyricsText, times, design, flushAutoSave]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      if (autoSaveDirtyRef.current) {
+        flushAutoSave();
+      }
+    }, AUTO_SAVE_INTERVAL_MS);
+
+    const handlePageHide = () => {
+      if (autoSaveDirtyRef.current) {
+        flushAutoSave();
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && autoSaveDirtyRef.current) {
+        flushAutoSave();
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (autoSaveDirtyRef.current) {
+        flushAutoSave();
+      } else if (autoSaveTimerRef.current !== null) {
+        window.clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  }, [flushAutoSave]);
 
   // Ensure Bengali fonts load cleanly
   useEffect(() => {
@@ -824,6 +934,7 @@ export default function App() {
 
   // Global keyboard shortcuts for fast playback & synchronization
   const shortcutsRef = useRef({
+    isLyricsAppActive: activeSuiteApp === 'lyrics',
     activeTab,
     isBusy: renderingMode !== null,
     lyricsCount: lyrics.length,
@@ -842,6 +953,7 @@ export default function App() {
   });
 
   shortcutsRef.current = {
+    isLyricsAppActive: activeSuiteApp === 'lyrics',
     activeTab,
     isBusy: renderingMode !== null,
     lyricsCount: lyrics.length,
@@ -874,14 +986,19 @@ export default function App() {
       }
 
       const cur = shortcutsRef.current;
-      if (cur.isBusy) return;
+      if (!cur.isLyricsAppActive || cur.isBusy) return;
 
       const keyLower = e.key.toLowerCase();
       if (e.altKey) return;
 
-      // Allow Ctrl/Cmd+Z for Undo when on Sync tab, ignore other Ctrl/Cmd combos
+      // Allow Ctrl/Cmd+Z for Undo when on Sync/AutoSync tabs, ignore other Ctrl/Cmd combos
       if (e.ctrlKey || e.metaKey) {
-        if (keyLower === 'z' && !e.shiftKey && cur.activeTab === 'sync' && !e.repeat) {
+        if (
+          keyLower === 'z' &&
+          !e.shiftKey &&
+          (cur.activeTab === 'sync' || cur.activeTab === 'autosync') &&
+          !e.repeat
+        ) {
           e.preventDefault();
           cur.undo();
         }
@@ -927,7 +1044,7 @@ export default function App() {
         return;
       }
 
-      if (cur.activeTab === 'sync') {
+      if (cur.activeTab === 'sync' || cur.activeTab === 'autosync') {
         if (e.key === 'ArrowUp') {
           e.preventDefault();
           cur.moveSelection(-1);
@@ -1096,6 +1213,12 @@ export default function App() {
         const fallbackType = mode === 'mp4' ? 'video/mp4' : 'video/webm';
         const type = (mr.mimeType || mime || fallbackType).split(';')[0];
         const blob = new Blob(chunks, { type });
+        if (!blob.size) {
+          setRecordProgress(0);
+          setRecordStatus('');
+          showToast('ভিডিও ডেটা তৈরি হয়নি — অনুগ্রহ করে অন্য ফরম্যাট (WebM) চেষ্টা করুন।', 'error');
+          return;
+        }
         const ext = mode === 'mp4' || type.includes('mp4') ? 'mp4' : 'webm';
 
         if (recordedVideoUrlRef.current) URL.revokeObjectURL(recordedVideoUrlRef.current);
@@ -1134,7 +1257,7 @@ export default function App() {
       let t1 = 0;
       let startedSong = false;
 
-      mr.start(1000);
+      mr.start(250);
       if (phase === 'song') {
         startedSong = true;
         audio.play().catch(() => {
@@ -1361,24 +1484,120 @@ export default function App() {
   };
 
   const canShareVideo = useMemo(() => {
-    if (!recordedBlob || !navigator.canShare) return false;
-    try {
-      return navigator.canShare({
-        files: [new File([recordedBlob], `lyric-video.${recordedExt}`, { type: recordedBlob.type })],
-      });
-    } catch {
-      return false;
+    return Boolean(recordedBlob && typeof navigator.share === 'function');
+  }, [recordedBlob]);
+
+  const saveBlobViaAndroidBridge = useCallback(
+    (blob: Blob, filename: string): boolean => {
+      const bridge = (
+        window as unknown as {
+          AndroidBridge?: {
+            startFileSave?: (name: string, mime: string) => string;
+            appendFileChunk?: (id: string, chunk: string) => void;
+            finishFileSave?: (id: string) => void;
+          };
+        }
+      ).AndroidBridge;
+      if (!bridge || typeof bridge.startFileSave !== 'function') return false;
+      showToast('ফোনের Downloads/TanvirCreativeStudio ফোল্ডারে সেভ হচ্ছে…', 'info');
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        try {
+          const res = String(reader.result || '');
+          const b64 = res.includes(',') ? res.split(',')[1] : res;
+          const id = bridge.startFileSave!(filename, blob.type || 'application/octet-stream');
+          const chunkSize = 262144;
+          for (let i = 0; i < b64.length; i += chunkSize) {
+            bridge.appendFileChunk?.(id, b64.slice(i, i + chunkSize));
+          }
+          bridge.finishFileSave?.(id);
+          showToast(`সেভ সম্পন্ন: ${filename}`, 'success');
+        } catch {
+          showToast('Android ফোল্ডারে সেভ করা যায়নি।', 'error');
+        }
+      };
+      reader.readAsDataURL(blob);
+      return true;
+    },
+    [showToast]
+  );
+
+  const handleDownloadRecordedVideo = useCallback(async () => {
+    if (!recordedBlob || !recordedBlob.size) {
+      showToast('আগে ভিডিও রেন্ডার করুন।', 'warning');
+      return;
     }
-  }, [recordedBlob, recordedExt]);
+    const filename = `lyric-video.${recordedExt}`;
+    if (saveBlobViaAndroidBridge(recordedBlob, filename)) return;
+
+    const pickerWindow = window as unknown as {
+      showSaveFilePicker?: (opts: {
+        suggestedName: string;
+        types?: Array<{ description: string; accept: Record<string, string[]> }>;
+      }) => Promise<{
+        createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
+      }>;
+    };
+    if (typeof pickerWindow.showSaveFilePicker === 'function' && window.self === window.top) {
+      try {
+        const mime = recordedExt === 'mp4' ? 'video/mp4' : 'video/webm';
+        const handle = await pickerWindow.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: `${recordedExt.toUpperCase()} Video`, accept: { [mime]: [`.${recordedExt}`] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(recordedBlob);
+        await writable.close();
+        showToast(`${recordedExt.toUpperCase()} ভিডিও সেভ সম্পন্ন হয়েছে!`, 'success');
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        // Fall through to forced octet-stream blob download
+      }
+    }
+
+    triggerBlobDownload(recordedBlob, filename, true);
+    showToast(`${recordedExt.toUpperCase()} ডাউনলোড শুরু হয়েছে… (না হলে বিকল্প ডাউনলোড চাপুন)`, 'success');
+  }, [recordedBlob, recordedExt, saveBlobViaAndroidBridge, showToast]);
+
+  const handleDownloadRecordedVideoAlt = useCallback(() => {
+    if (!recordedBlob || !recordedBlob.size) {
+      showToast('আগে ভিডিও রেন্ডার করুন।', 'warning');
+      return;
+    }
+    const filename = `lyric-video.${recordedExt}`;
+    if (saveBlobViaAndroidBridge(recordedBlob, filename)) return;
+    if (recordedBlob.size > 48 * 1024 * 1024) {
+      showToast(
+        `ফাইলটি বড় (${(recordedBlob.size / 1024 / 1024).toFixed(1)} MB) — বিকল্প ডাউনলোড চেষ্টা হচ্ছে, না হলে শেয়ার বা GitHub APK ব্যবহার করুন।`,
+        'warning'
+      );
+    } else {
+      showToast('বিকল্প ডাউনলোড (APK / WebView) প্রস্তুত হচ্ছে…', 'info');
+    }
+    triggerDataUrlDownload(recordedBlob, filename, (ok) => {
+      if (ok) {
+        showToast(`বিকল্প ডাউনলোড পাঠানো হয়েছে: ${filename}`, 'success');
+      } else {
+        showToast('বিকল্প ডাউনলোড ব্লক হয়েছে — শেয়ার বাটন বা GitHub APK ব্যবহার করুন।', 'error');
+      }
+    });
+  }, [recordedBlob, recordedExt, saveBlobViaAndroidBridge, showToast]);
 
   const handleShareVideo = async () => {
     if (!recordedBlob || !navigator.share) return;
     try {
       await navigator.share({
-        files: [new File([recordedBlob], `lyric-video.${recordedExt}`, { type: recordedBlob.type })],
+        files: [
+          new File([recordedBlob], `lyric-video.${recordedExt}`, {
+            type: recordedBlob.type || (recordedExt === 'mp4' ? 'video/mp4' : 'video/webm'),
+          }),
+        ],
+        title: `lyric-video.${recordedExt}`,
       });
-    } catch {
-      // User dismissed share sheet
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      showToast('এই ব্রাউজার/WebView-তে ভিডিও শেয়ার সাপোর্ট নেই — বিকল্প ডাউনলোড ব্যবহার করুন।', 'warning');
     }
   };
 
@@ -1400,15 +1619,10 @@ export default function App() {
   };
 
   const handleSaveProject = () => {
-    const a = saveToStorage('lyrics', lyrics);
-    const b = saveToStorage('times', times);
-    const c = saveToStorage('design', {
-      ...design,
-      bgTheme: design.bgTheme === 'image' || design.bgTheme === 'video' ? 'rain' : design.bgTheme,
-    });
+    const ok = flushAutoSave();
     showToast(
-      a && b && c ? 'প্রজেক্ট ব্রাউজারে সেভ হয়েছে।' : 'সেভ করা যায়নি (স্টোরেজ সীমাবদ্ধ)।',
-      a && b && c ? 'success' : 'warning'
+      ok ? 'প্রজেক্ট ব্রাউজারে সেভ হয়েছে।' : 'সেভ করা যায়নি (স্টোরেজ সীমাবদ্ধ)।',
+      ok ? 'success' : 'warning'
     );
   };
 
@@ -1587,28 +1801,186 @@ export default function App() {
     ]);
   };
 
+  const handleSelectSuiteApp = useCallback((app: CreativeSuiteApp) => {
+    setActiveSuiteApp(app);
+    if (app !== 'lyrics') {
+      audioRef.current?.pause();
+      if (bgMediaRef.current instanceof HTMLVideoElement) {
+        bgMediaRef.current.pause();
+      }
+      setLoadedSuiteApps((prev) => (prev[app] ? prev : { ...prev, [app]: true }));
+    } else if (design.bgTheme === 'video' && bgMediaRef.current instanceof HTMLVideoElement) {
+      bgMediaRef.current.play().catch(() => {});
+    }
+  }, [design.bgTheme]);
+
+  // Receive translated lyrics directly from the Translator tab (p3)
+  useEffect(() => {
+    const onMessage = (ev: MessageEvent) => {
+      const msg = ev.data;
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'TCS_STORAGE_SET' && typeof msg.key === 'string') {
+        try {
+          localStorage.setItem(msg.key, String(msg.value ?? ''));
+        } catch {
+          // Ignore storage restrictions
+        }
+        document.querySelectorAll('iframe').forEach((frame) => {
+          try {
+            if (frame.contentWindow && frame.contentWindow !== ev.source) {
+              frame.contentWindow.postMessage(
+                { type: 'TCS_STORAGE_SYNC', key: msg.key, value: String(msg.value ?? '') },
+                '*'
+              );
+            }
+          } catch {
+            // Ignore cross-frame errors
+          }
+        });
+        return;
+      }
+      if (msg.type === 'TCS_STORAGE_REMOVE' && typeof msg.key === 'string') {
+        try {
+          localStorage.removeItem(msg.key);
+        } catch {
+          // Ignore storage restrictions
+        }
+        document.querySelectorAll('iframe').forEach((frame) => {
+          try {
+            if (frame.contentWindow && frame.contentWindow !== ev.source) {
+              frame.contentWindow.postMessage(
+                { type: 'TCS_STORAGE_SYNC', key: msg.key, value: null },
+                '*'
+              );
+            }
+          } catch {
+            // Ignore cross-frame errors
+          }
+        });
+        return;
+      }
+      if (msg.type === 'TCS_DOWNLOAD_FILE' && msg.buffer) {
+        const filename = typeof msg.name === 'string' && msg.name ? msg.name : 'studio-video.webm';
+        const mime = typeof msg.mime === 'string' && msg.mime ? msg.mime : 'application/octet-stream';
+        const blob = new Blob([msg.buffer], { type: mime });
+        if (!saveBlobViaAndroidBridge(blob, filename)) {
+          triggerBlobDownload(blob, filename, true);
+          showToast(`ডাউনলোড শুরু হয়েছে: ${filename}`, 'success');
+        }
+        return;
+      }
+      if (msg.type === 'TCS_DOWNLOAD_DATA_URL' && typeof msg.dataUrl === 'string' && msg.dataUrl.startsWith('data:')) {
+        const filename = typeof msg.name === 'string' && msg.name ? msg.name : 'studio-video.webm';
+        const a = document.createElement('a');
+        a.href = msg.dataUrl;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        window.setTimeout(() => {
+          try {
+            a.remove();
+          } catch {
+            // ignore
+          }
+        }, 4000);
+        showToast(`বিকল্প ডাউনলোড পাঠানো হয়েছে: ${filename}`, 'success');
+        return;
+      }
+      if (msg.type === 'TCS_SEND_LYRICS_TO_STUDIO' && typeof msg.text === 'string' && msg.text.trim()) {
+        const nextLines = msg.text
+          .split('\n')
+          .map((l: string) => l.trim())
+          .filter(Boolean);
+        if (nextLines.length === 0) return;
+        const nextTimes = nextLines.map(() => null);
+        setLyricsText(nextLines.join('\n'));
+        setLyrics(nextLines);
+        setTimes(nextTimes);
+        setSelectedIdx(0);
+        saveToStorage('lyrics', nextLines);
+        saveToStorage('times', nextTimes);
+        setActiveSuiteApp('lyrics');
+        setActiveTab('lyrics');
+        showToast(`ট্রান্সলেটর থেকে ${nextLines.length}টি লিরিক লাইন লোড হয়েছে!`, 'success');
+      }
+    };
+    const w = window as unknown as {
+      __TCS_TRIGGER_DOWNLOAD__?: (blob: Blob, name: string) => void;
+      __TCS_TRIGGER_DATA_URL__?: (dataUrl: string, name: string) => void;
+    };
+    w.__TCS_TRIGGER_DOWNLOAD__ = (blob: Blob, name: string) => {
+      if (!saveBlobViaAndroidBridge(blob, name)) {
+        triggerBlobDownload(blob, name, true);
+      }
+    };
+    w.__TCS_TRIGGER_DATA_URL__ = (dataUrl: string, name: string) => {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = name;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      window.setTimeout(() => {
+        try {
+          a.remove();
+        } catch {
+          // ignore
+        }
+      }, 4000);
+    };
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      delete w.__TCS_TRIGGER_DOWNLOAD__;
+      delete w.__TCS_TRIGGER_DATA_URL__;
+    };
+  }, [saveBlobViaAndroidBridge, showToast]);
+
   const handleDownloadFixedHtml = async () => {
     try {
-      const res = await fetch('/lyric-studio-fixed.html');
+      const res = await fetch(`/lyric-studio-fixed.html?v=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Fetch failed');
       const htmlText = await res.text();
       triggerBlobDownload(
-        new Blob([htmlText], { type: 'text/html;charset=utf-8' }),
+        new Blob([htmlText], { type: 'application/octet-stream' }),
         'lyric-studio-fixed.html'
       );
-      showToast('ফিক্সড HTML ফাইল ডাউনলোড হয়েছে!', 'success');
+      showToast('লিরিক স্টুডিও HTML ডাউনলোড হয়েছে!', 'success');
     } catch {
       showToast('HTML ফাইল ডাউনলোড করা যায়নি।', 'error');
     }
   };
 
+  const handleDownloadAllInOneHtml = async () => {
+    try {
+      const res = await fetch(`/tanvir-creative-studio-all-in-one.html?v=${Date.now()}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('Fetch failed');
+      const htmlText = await res.text();
+      triggerBlobDownload(
+        new Blob([htmlText], { type: 'application/octet-stream' }),
+        'Tanvir_Creative_Studio_All_in_One.html'
+      );
+      showToast('All-in-One HTML ফাইল (৪টি অ্যাপ সহ) ডাউনলোড হয়েছে!', 'success');
+    } catch {
+      showToast('All-in-One HTML ডাউনলোড করা যায়নি।', 'error');
+    }
+  };
+
   const handleDownloadApkZip = async () => {
     try {
-      const res = await fetch('/lyric-studio-github-apk.zip');
+      const res = await fetch(`/tanvir-creative-studio-github-apk.zip?v=${Date.now()}`, {
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error('Fetch failed');
-      const zipBlob = await res.blob();
-      triggerBlobDownload(zipBlob, 'lyric-studio-github-apk.zip');
-      showToast('GitHub APK প্রজেক্ট (.zip) ডাউনলোড হয়েছে!', 'success');
+      const zipBuf = await res.arrayBuffer();
+      triggerBlobDownload(
+        new Blob([zipBuf], { type: 'application/octet-stream' }),
+        'tanvir-creative-studio-github-apk.zip'
+      );
+      showToast('All-in-One GitHub APK প্রজেক্ট (.zip) ডাউনলোড শুরু হয়েছে!', 'success');
     } catch {
       showToast('APK ZIP ফাইল ডাউনলোড করা যায়নি।', 'error');
     }
@@ -1621,9 +1993,12 @@ export default function App() {
       <audio ref={audioRef} className="hidden" />
 
       <TopBar
+        activeSuiteApp={activeSuiteApp}
         activeTab={activeTab}
+        onSelectSuiteApp={handleSelectSuiteApp}
         onSelectTab={handleSelectTab}
-        onDownloadHtml={handleDownloadFixedHtml}
+        onDownloadAllInOneHtml={handleDownloadAllInOneHtml}
+        onDownloadApkZip={handleDownloadApkZip}
       />
 
       {toast && (
@@ -1644,12 +2019,72 @@ export default function App() {
         </div>
       )}
 
-      <main className="mx-auto max-w-7xl px-4 pt-5 sm:px-6">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
-          {/* Left column: Sticky Live Preview Stage on Desktop; shown on Sync/Design on Mobile */}
+      {/* Embedded Companion Apps from Tanvir's Creative Studio (preserved in DOM once opened) */}
+      {loadedSuiteApps.cinema && (
+        <div
+          className={
+            activeSuiteApp === 'cinema'
+              ? 'mx-auto max-w-7xl px-2 sm:px-6 pt-3'
+              : 'hidden'
+          }
+        >
+          <iframe
+            title="CinemaMaster AI Director"
+            src="/studio-modules/p1.html"
+            allow="clipboard-write"
+            className="w-full h-[calc(100vh-140px)] min-h-[640px] rounded-2xl border border-[#1e2438] bg-[#090b12]"
+          />
+        </div>
+      )}
+
+      {loadedSuiteApps.intro && (
+        <div
+          className={
+            activeSuiteApp === 'intro'
+              ? 'mx-auto max-w-7xl px-2 sm:px-6 pt-3'
+              : 'hidden'
+          }
+        >
+          <iframe
+            title="Intro / Outro Maker"
+            src="/studio-modules/p2.html"
+            allow="clipboard-write; screen-wake-lock"
+            className="w-full h-[calc(100vh-140px)] min-h-[640px] rounded-2xl border border-[#1e2438] bg-[#07070b]"
+          />
+        </div>
+      )}
+
+      {loadedSuiteApps.translator && (
+        <div
+          className={
+            activeSuiteApp === 'translator'
+              ? 'mx-auto max-w-7xl px-2 sm:px-6 pt-3'
+              : 'hidden'
+          }
+        >
+          <iframe
+            title="লিরিক ট্রান্সলেটর"
+            src="/studio-modules/p3.html"
+            allow="clipboard-write"
+            className="w-full h-[calc(100vh-140px)] min-h-[640px] rounded-2xl border border-[#1e2438] bg-[#0b0f19]"
+          />
+        </div>
+      )}
+
+      <main
+        className={`mx-auto max-w-7xl px-4 pt-5 sm:px-6 ${
+          activeSuiteApp === 'lyrics' ? 'block' : 'hidden'
+        }`}
+      >
+        <div className="grid grid-cols-1 gap-4 lg:gap-6 lg:grid-cols-12 lg:items-start">
+          {/* Left column: Sticky Live Preview Stage on Desktop AND Sticky Compact on Mobile during Manual Sync / Design */}
           <div
-            className={`lg:col-span-6 lg:sticky lg:top-20 ${
-              activeTab === 'sync' || activeTab === 'design' ? 'block' : 'hidden lg:block'
+            className={`lg:col-span-6 lg:sticky lg:top-28 ${
+              activeTab === 'sync' || activeTab === 'design'
+                ? 'sticky top-[106px] sm:top-[96px] z-20 block'
+                : activeTab === 'autosync'
+                ? 'block'
+                : 'hidden lg:block'
             }`}
           >
             <PreviewStage
@@ -1661,6 +2096,7 @@ export default function App() {
               hasAudio={Boolean(audioUrl)}
               syncedCount={syncedCount}
               totalLines={lyrics.length}
+              compact={activeTab === 'sync' || activeTab === 'design'}
               onTogglePlay={handleTogglePlay}
               onRestart={handleRestart}
               onSeekRelative={handleSeekRelative}
@@ -1697,8 +2133,6 @@ export default function App() {
                 selectedIdx={selectedIdx}
                 activePlayIdx={activePlayIdx}
                 hasAudio={Boolean(audioUrl)}
-                currentAudioTime={currentTime}
-                introSeconds={introSeconds}
                 canUndo={undoStack.length > 0}
                 syncMessage={syncMessage}
                 onSelectLine={setSelectedIdx}
@@ -1706,12 +2140,31 @@ export default function App() {
                 onMarkLine={handleMarkLine}
                 onInsertGap={handleInsertGap}
                 onAdjustTime={handleAdjustTime}
+                onUndo={handleUndo}
+                onOpenAutoSync={() => setActiveTab('autosync')}
+              />
+            )}
+
+            {activeTab === 'autosync' && (
+              <AutoSyncTab
+                lyrics={lyrics}
+                times={times}
+                selectedIdx={selectedIdx}
+                activePlayIdx={activePlayIdx}
+                hasAudio={Boolean(audioUrl)}
+                currentAudioTime={currentTime}
+                introSeconds={introSeconds}
+                canUndo={undoStack.length > 0}
+                syncMessage={syncMessage}
+                onSelectLine={setSelectedIdx}
+                onJumpToLine={handleJumpToLine}
                 onBatchOffset={handleBatchOffset}
                 onUpdateIntroSeconds={handleUpdateIntroSeconds}
                 onAlignSyncToIntro={handleAlignSyncToIntro}
                 onSetLineTimeManual={handleSetLineTimeManual}
                 onUndo={handleUndo}
                 onAutoSync={handleAutoSync}
+                onOpenManualSync={() => setActiveTab('sync')}
               />
             )}
 
@@ -1742,6 +2195,8 @@ export default function App() {
                 onStartOrStopMp4={handleStartOrStopMp4}
                 onStartOrStopWebm={handleStartOrStopWebm}
                 onCancelUnsyncedConfirm={() => setPendingUnsyncedMode(null)}
+                onDownloadVideo={handleDownloadRecordedVideo}
+                onDownloadVideoAlt={handleDownloadRecordedVideoAlt}
                 onShareVideo={handleShareVideo}
                 onSaveLrc={handleSaveLrc}
                 onSaveProject={handleSaveProject}
@@ -1750,6 +2205,7 @@ export default function App() {
                 onMakeThumbnail={handleMakeThumbnail}
                 onRunDiagnostics={handleRunDiagnostics}
                 onDownloadFixedHtml={handleDownloadFixedHtml}
+                onDownloadAllInOneHtml={handleDownloadAllInOneHtml}
                 onDownloadApkZip={handleDownloadApkZip}
               />
             )}
@@ -1757,7 +2213,9 @@ export default function App() {
         </div>
       </main>
 
-      <MobileBottomNav activeTab={activeTab} onSelectTab={handleSelectTab} />
+      {activeSuiteApp === 'lyrics' && (
+        <MobileBottomNav activeTab={activeTab} onSelectTab={handleSelectTab} />
+      )}
 
       <FullscreenPreviewModal
         isOpen={isFullscreenPreviewOpen}

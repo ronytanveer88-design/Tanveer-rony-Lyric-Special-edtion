@@ -33,6 +33,8 @@ interface ExportTabProps {
   onStartOrStopMp4: (forceUnsynced: boolean) => void;
   onStartOrStopWebm: (forceUnsynced: boolean) => void;
   onCancelUnsyncedConfirm: () => void;
+  onDownloadVideo: () => void;
+  onDownloadVideoAlt: () => void;
   onShareVideo: () => void;
   onSaveLrc: () => void;
   onSaveProject: () => void;
@@ -41,6 +43,7 @@ interface ExportTabProps {
   onMakeThumbnail: () => void;
   onRunDiagnostics: () => void;
   onDownloadFixedHtml: () => void;
+  onDownloadAllInOneHtml: () => void;
   onDownloadApkZip: () => void;
 }
 
@@ -60,6 +63,8 @@ export const ExportTab: React.FC<ExportTabProps> = ({
   onStartOrStopMp4,
   onStartOrStopWebm,
   onCancelUnsyncedConfirm,
+  onDownloadVideo,
+  onDownloadVideoAlt,
   onShareVideo,
   onSaveLrc,
   onSaveProject,
@@ -68,6 +73,7 @@ export const ExportTab: React.FC<ExportTabProps> = ({
   onMakeThumbnail,
   onRunDiagnostics,
   onDownloadFixedHtml,
+  onDownloadAllInOneHtml,
   onDownloadApkZip,
 }) => {
   const projectFileInputRef = useRef<HTMLInputElement>(null);
@@ -203,14 +209,22 @@ export const ExportTab: React.FC<ExportTabProps> = ({
               className="w-full rounded-xl border border-[#232b45] bg-black"
             />
             <div className="flex flex-col gap-2 sm:flex-row">
-              <a
-                href={recordedVideoUrl}
-                download={`lyric-video.${recordedExt}`}
-                className="flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff7a3d] to-[#ffb347] px-4 py-2.5 text-sm font-bold text-[#090b12] no-underline whitespace-nowrap"
+              <button
+                type="button"
+                onClick={onDownloadVideo}
+                className="flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff7a3d] to-[#ffb347] px-4 py-2.5 text-sm font-bold text-[#090b12] whitespace-nowrap cursor-pointer"
               >
                 <Download className="w-4 h-4 shrink-0" />
                 <span>{recordedExt.toUpperCase()} ডাউনলোড</span>
-              </a>
+              </button>
+              <button
+                type="button"
+                onClick={onDownloadVideoAlt}
+                className="flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-xl border border-[#2d385c] bg-[#161c30] px-4 py-2.5 text-xs font-semibold text-[#eef1f8] hover:border-[#ff7a3d] whitespace-nowrap cursor-pointer"
+              >
+                <Download className="w-4 h-4 shrink-0 text-[#ffb347]" />
+                <span>বিকল্প ডাউনলোড (APK / WebView)</span>
+              </button>
               {canShareVideo && (
                 <button
                   type="button"
@@ -222,6 +236,9 @@ export const ExportTab: React.FC<ExportTabProps> = ({
                 </button>
               )}
             </div>
+            <p className="text-[11px] leading-relaxed text-[#8a97b8]">
+              টিপস: সরাসরি ডাউনলোড না হলে <strong className="text-[#eef1f8]">বিকল্প ডাউনলোড (APK / WebView)</strong> বা <strong className="text-[#eef1f8]">শেয়ার / সেভ</strong> চাপুন, অথবা উপরের ভিডিও প্লেয়ারের <strong className="text-[#eef1f8]">⋮</strong> মেনু থেকে Download করুন।
+            </p>
           </div>
         )}
       </div>
@@ -305,23 +322,38 @@ export const ExportTab: React.FC<ExportTabProps> = ({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onDownloadFixedHtml}
-          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-[#2d385c] bg-[#161c30] px-4 py-2.5 text-xs font-semibold text-white hover:border-[#ff7a3d] cursor-pointer"
-        >
-          <FileCode2 className="w-4 h-4 text-[#ff7a3d]" />
-          <span>অফলাইন সিঙ্গেল-ফাইল HTML (lyric-studio-fixed.html) ডাউনলোড</span>
-        </button>
+        <div className="space-y-2 pt-1 border-t border-[#1e2438]">
+          <p className="text-xs leading-relaxed text-[#9aa6c8]">
+            সব ৪টি অ্যাপ (🎬 সিনেমা AI + 🎞️ ইন্ট্রো/আউট্রো + 🌐 ট্রান্সলেটর + 🎵 পূর্ণ লিরিক ভিডিও স্টুডিও) একসাথে Android APK বা সিঙ্গেল HTML হিসেবে ডাউনলোড করুন:
+          </p>
 
-        <button
-          type="button"
-          onClick={onDownloadApkZip}
-          className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff7a3d] to-[#ffb347] px-4 py-2.5 text-xs font-bold text-[#090b12] transition-opacity hover:opacity-95 cursor-pointer"
-        >
-          <Package className="w-4 h-4 shrink-0" />
-          <span>GitHub APK প্রজেক্ট (.zip) ডাউনলোড — Android APK বানান</span>
-        </button>
+          <button
+            type="button"
+            onClick={onDownloadApkZip}
+            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff7a3d] to-[#ffb347] px-4 py-2.5 text-xs font-bold text-[#090b12] transition-opacity hover:opacity-95 cursor-pointer"
+          >
+            <Package className="w-4 h-4 shrink-0" />
+            <span>All-in-One GitHub APK প্রজেক্ট (.zip) — ৪-ইন-১ Android APK বানান</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onDownloadAllInOneHtml}
+            className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-[#ff7a3d]/50 bg-[#1a1826] px-4 py-2.5 text-xs font-semibold text-white hover:border-[#ff7a3d] cursor-pointer"
+          >
+            <FileCode2 className="w-4 h-4 text-[#ffb347] shrink-0" />
+            <span>All-in-One সিঙ্গেল-ফাইল HTML (Tanvir Creative Studio) ডাউনলোড</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onDownloadFixedHtml}
+            className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl border border-[#2d385c] bg-[#161c30] px-4 py-2 text-xs font-semibold text-[#cbd5e1] hover:border-[#ff7a3d] hover:text-white cursor-pointer"
+          >
+            <FileCode2 className="w-4 h-4 text-[#ff7a3d] shrink-0" />
+            <span>শুধু লিরিক স্টুডিও HTML (lyric-studio-fixed.html) ডাউনলোড</span>
+          </button>
+        </div>
 
         {lrcPreview && (
           <div>

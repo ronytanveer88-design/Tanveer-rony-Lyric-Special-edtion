@@ -301,11 +301,11 @@ export const DesignTab: React.FC<DesignTabProps> = ({
 
         <div>
           <label htmlFor="video-filter-select" className="mb-1.5 block text-xs text-[#9aa6c8]">
-            ভিডিও ফিল্টার (Video Filters)
+            ভিডিও ফিল্টার (Video Filter)
           </label>
           <select
             id="video-filter-select"
-            aria-label="Video Filters"
+            aria-label="Video Filter"
             value={design.videoFilter}
             onChange={(e) => onUpdateDesign({ videoFilter: e.target.value as VideoFilter })}
             className="w-full rounded-xl border border-[#232b45] bg-[#0a0d18] px-3 py-2.5 text-sm text-white focus:border-[#ff7a3d] focus:outline-none"
@@ -377,6 +377,26 @@ export const DesignTab: React.FC<DesignTabProps> = ({
               <option value="None">None</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <div className="mb-1.5 flex items-center justify-between text-xs">
+            <label htmlFor="transition-speed-slider" className="text-[#9aa6c8]">
+              ট্রানজিশন স্পিড (Transition Speed)
+            </label>
+            <span className="font-mono-nums text-[#eef1f8]">{design.transitionSpeed.toFixed(2)}s</span>
+          </div>
+          <input
+            id="transition-speed-slider"
+            type="range"
+            min={0.1}
+            max={2}
+            step={0.05}
+            aria-label="Transition Speed"
+            value={design.transitionSpeed}
+            onChange={(e) => onUpdateDesign({ transitionSpeed: Number(e.target.value) })}
+            className="w-full cursor-pointer accent-[#ff7a3d]"
+          />
         </div>
 
         <div>

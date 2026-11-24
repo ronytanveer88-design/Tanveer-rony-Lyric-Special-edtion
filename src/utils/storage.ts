@@ -33,15 +33,69 @@ export function formatLrcTime(seconds: number): string {
   return `[${pad(mins)}:${pad(secs)}.${pad(rem)}]`;
 }
 
-export function triggerBlobDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
+export function triggerBlobDownload(
+  blob: Blob,
+  filename: string,
+  forceOctetStream = false
+): void {
+  const payload = forceOctetStream
+    ? new Blob([blob], { type: 'application/octet-stream' })
+    : blob;
+  const url = URL.createObjectURL(payload);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 15000);
+  window.setTimeout(() => {
+    try {
+      a.remove();
+    } catch {
+      // ignore
+    }
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore
+    }
+  }, 60000);
+}
+
+export function triggerDataUrlDownload(
+  blob: Blob,
+  filename: string,
+  onDone?: (ok: boolean) => void
+): void {
+  const reader = new FileReader();
+  reader.onerror = () => onDone?.(false);
+  reader.onloadend = () => {
+    const dataUrl = String(reader.result || '');
+    if (!dataUrl.startsWith('data:')) {
+      onDone?.(false);
+      return;
+    }
+    try {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      window.setTimeout(() => {
+        try {
+          a.remove();
+        } catch {
+          // ignore
+        }
+      }, 4000);
+      onDone?.(true);
+    } catch {
+      onDone?.(false);
+    }
+  };
+  reader.readAsDataURL(new Blob([blob], { type: 'application/octet-stream' }));
 }
 
 export function findActiveLineIndex(times: Array<number | null>, currentTime: number): number {

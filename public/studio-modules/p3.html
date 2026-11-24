@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>লিরিক ট্রান্সলেটর</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#0b0f19;color:#fff;font-family:"Hind Siliguri",system-ui,sans-serif;padding:14px}.w{max-width:600px;margin:auto}h1{font-size:19px;margin:4px 0 12px}
+.m{display:flex;flex-direction:column;gap:8px}.m button,.a{height:48px;border-radius:12px;border:1px solid #fff3;background:#ffffff12;color:#fff;font:600 15px inherit;font-family:inherit}.m button.on{background:#fff;color:#000}
+textarea,input{width:100%;margin-top:8px;padding:12px;border-radius:12px;border:1px solid #fff3;background:#0008;color:#fff;font:16px/1.6 inherit;font-family:inherit}textarea{min-height:170px}
+.go{width:100%;height:52px;border:0;border-radius:14px;margin-top:12px;color:#fff;font:700 16px inherit;font-family:inherit;background:linear-gradient(135deg,#E0245E,#FF6B9D)}.go:disabled{opacity:.5}
+.r{display:flex;gap:8px;margin-top:8px}.r button{flex:1}#s{font-size:12px;opacity:.85;min-height:18px;margin-top:8px}label{font-size:12px;opacity:.7;display:block;margin-top:12px}</style></head><body><div class="w">
+<h1>🌐 লিরিক ট্রান্সলেটর</h1>
+<div class="m" id="m"><button class="on" data-k="en">বাংলা ➔ English</button><button data-k="hi">বাংলা ➔ হিন্দি (देवनागरी)</button><button data-k="hr">বাংলা ➔ হিন্দি (ইংরেজি হরফে, Roman)</button></div>
+<textarea id="i" placeholder="বাংলা লিরিক এখানে বসাও…"></textarea>
+<button class="go" id="go">অনুবাদ করো</button><div id="s"></div>
+<textarea id="o" placeholder="অনুবাদ এখানে আসবে…" readonly></textarea>
+<div class="r"><button class="a" id="cp">কপি</button><button class="a" id="sendLy">🎵 লিরিক ভিডিওতে পাঠাও</button><button class="a" id="cl">মুছে ফেলো</button></div>
+<label>Gemini API Key (একবার বসালেই হবে; সিনেমা ট্যাবের কি-ও এটাই)</label><input id="k" type="password" placeholder="AIza...">
+</div><script>
+const $=i=>document.getElementById(i);let mode='en';
+const _mem=Object.assign({},(window.__TCS_INIT_STORAGE__&&typeof window.__TCS_INIT_STORAGE__==='object')?window.__TCS_INIT_STORAGE__:{});
+function _rawLS(){try{localStorage.setItem('_t','1');localStorage.removeItem('_t');return localStorage}catch(e){}try{if(parent&&parent!==window&&parent.localStorage){parent.localStorage.setItem('_t','1');parent.localStorage.removeItem('_t');return parent.localStorage}}catch(e){}return null}
+const ST={
+  getItem(k){try{const s=_rawLS();if(s){const v=s.getItem(k);if(v!=null){_mem[k]=v;return v}}}catch(e){}return Object.prototype.hasOwnProperty.call(_mem,k)?_mem[k]:''},
+  setItem(k,v){const val=String(v);_mem[k]=val;try{const s=_rawLS();if(s)s.setItem(k,val)}catch(e){}try{if(parent&&parent!==window)parent.postMessage({type:'TCS_STORAGE_SET',key:k,value:val},'*')}catch(e){}}
+};
+window.addEventListener('message',ev=>{const m=ev&&ev.data;if(!m||typeof m!=='object')return;if(m.type==='TCS_STORAGE_SYNC'&&typeof m.key==='string'){_mem[m.key]=m.value==null?'':String(m.value);if(m.key==='cm_key'&&$('k'))$('k').value=m.value||'';}});
+$('k').value=ST.getItem('cm_key')||'';$('k').onchange=()=>ST.setItem('cm_key',$('k').value.trim());
+$('m').onclick=e=>{const k=e.target.dataset.k;if(!k)return;mode=k;[...$('m').children].forEach(b=>b.classList.toggle('on',b===e.target))};
+const P={en:'Translate these Bengali song lyrics into natural, poetic English that keeps the emotion.',hi:'Translate these Bengali song lyrics into natural, poetic Hindi written in Devanagari script.',hr:'You are a Hindi lyricist. Step 1: translate these Bengali song lyrics into natural, poetic, singable Hindi that keeps the meaning and emotion. Step 2: output ONLY that Hindi written in Roman/Latin letters as Hinglish song lyrics, for example: Tum mere paas ho, dil mein bas gaye. The output must be Hindi words, NOT an English translation and NOT a Bengali transliteration. No Devanagari, no Bengali script, no notes.'};
+$('go').onclick=async()=>{const t=$('i').value.trim();if(!t){$('s').textContent='আগে বাংলা লিরিক লেখো।';return}
+const key=($('k').value||ST.getItem('cm_key')||'').trim();if(!key){$('s').textContent='Gemini API Key বসাও (নিচের ঘরে)।';return}
+ST.setItem('cm_key',key);let m0=ST.getItem('cm_model')||'';if(!/^gemini-(2|3)/.test(m0))m0='gemini-2.5-flash';
+const list=[m0];['gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].forEach(x=>{if(!list.includes(x))list.push(x)});
+const body=JSON.stringify({contents:[{parts:[{text:P[mode]+' Keep exactly the same number of lines and line breaks. Output only the translation, no notes.\n\n'+t}]}]});
+$('go').disabled=true;let cur=list[0],sec=0,err='';const tm=setInterval(()=>{sec++;$('s').textContent='অনুবাদ হচ্ছে… '+sec+' সেকেন্ড ('+cur+')'},1000);$('s').textContent='অনুবাদ হচ্ছে…';
+for(const model of list){cur=model;const ac=new AbortController(),to=setTimeout(()=>ac.abort(),45000);
+try{const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(key),{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json'},body});
+const d=await r.json();clearTimeout(to);if(!r.ok)throw new Error(d.error&&d.error.message||r.status);
+if(!d.candidates||!d.candidates[0]||!d.candidates[0].content)throw new Error('AI উত্তর দেয়নি (লেখা ব্লক হয়েছে হতে পারে)');
+const txt=d.candidates[0].content.parts.map(p=>p.text||'').join('').trim();if(!txt)throw new Error('খালি উত্তর এসেছে');
+$('o').value=txt;err='';break}catch(e){clearTimeout(to);err=e.name==='AbortError'?'৪৫ সেকেন্ডে উত্তর আসেনি (ইন্টারনেট ধীর?)':e.message}}
+clearInterval(tm);$('s').textContent=err?'ব্যর্থ: '+err:'হয়ে গেছে ✓ ('+cur+')';$('go').disabled=false};
+$('cp').onclick=async()=>{const val=$('o').value;let ok=false;try{const b=window.AndroidBridge||(parent&&parent.AndroidBridge);if(b&&typeof b.copyToClipboard==='function'){b.copyToClipboard(val);ok=true}}catch(e){}if(!ok){try{await navigator.clipboard.writeText(val);ok=true}catch(e){$('o').select();document.execCommand('copy')}}$('s').textContent='কপি হয়েছে ✓'};
+$('sendLy').onclick=()=>{const txt=($('o').value||$('i').value||'').trim();if(!txt){$('s').textContent='পাঠানোর মতো লিরিক নেই।';return}try{parent.postMessage({type:'TCS_SEND_LYRICS_TO_STUDIO',text:txt},'*');$('s').textContent='লিরিক ভিডিও স্টুডিওতে পাঠানো হয়েছে ✓'}catch(e){$('s').textContent='সরাসরি পাঠানো যায়নি, কপি করে ব্যবহার করুন।'}};
+$('cl').onclick=()=>{$('i').value='';$('o').value='';$('s').textContent=''};
+</script></body></html>
